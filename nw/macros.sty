@@ -1,0 +1,103 @@
+\NeedsTeXFormat{LaTeX2e}[1994/06/01]
+\ProvidesPackage{macros}[2021/12/11 Macros for literate program of Mizar]
+\usepackage[inner=6pc,outer=6pc,top=5pc,headsep=1pc,bottom=6pc]{geometry}
+\RequirePackage{upquote}
+\RequirePackage{enumitem}
+\setlist{nosep}
+\RequirePackage{makeidx}
+\RequirePackage{titlesec}
+\RequirePackage[dvipsnames]{xcolor}
+\RequirePackage[nottoc,notlot,notlof]{tocbibind}
+
+\RequirePackage{ifpdf}
+\RequirePackage[\ifpdf\else dvipdfmx\fi]{hyperref}
+
+% eTeX uses this color for links, it's better than BrickRed imho
+\definecolor{linkRed}{cmyk}{0.28, 1, 1, 0.35}
+\hypersetup{colorlinks=true,
+    linkcolor=linkRed,
+    citecolor=linkRed,
+    filecolor=linkRed,
+    urlcolor=linkRed,
+%%     pdfinfo={
+%%       Title={Formalizing Finite Groups in Mizar},
+%%       Author={Alex Nelson},
+%%       CreationDate={D:20211214152256},
+%%       ModDate={D:\pdfdate}
+%% }
+}
+
+% based on Knuth's taocpmac.tex
+\ifdefined\chapter
+\DeclareRobustCommand\chunk@start@chapter{%\resetParagraphChunks%
+  \gdef\theHchunk{\thechapter.\secprefix\arabic{chunk}.}%
+  \gdef\paragraphprefix{\thechapter\chunk@separator\arabic{section}\chunk@divider}}
+\DeclareRobustCommand\chunk@start@chapter@nonumber{%\resetParagraphChunks%
+  \gdef\theHchunk{\thechapter.\secprefix\arabic{chunk}.}%
+  \gdef\paragraphprefix{\thechapter\chunk@divider}}
+%\font\chapterfont=cmssbx10 scaled\magstep3
+\def\chapterfont{\sffamily\bfseries\LARGE} % \LARGE = magstep3
+\def\twelvess{\sffamily\large} % = cmss12
+\renewcommand\chapter{\clearpage%\if@openright\cleardoublepage\else\clearpage\fi
+                    \thispagestyle{plain}%
+                    \global\@topnum\z@
+                    \@afterindentfalse
+                    \secdef\@chapter\@schapter}
+\def\@makechapterhead#1{%
+  {\parindent \z@ \raggedright \normalfont
+    \ifnum \c@secnumdepth >\m@ne
+      \if@mainmatter
+        \twelvess \@chapapp\space \thechapter
+        \par\nobreak
+        \vskip 4pc
+      \fi
+    \fi
+    \interlinepenalty\@M
+    \chapterfont\hfill #1\par\nobreak
+    \vskip 2pc
+    \protect\chunk@start@chapter%
+}}
+% starred chapter heading
+\def\@makeschapterhead#1{%
+  {\parindent \z@ \raggedright \normalfont
+    \interlinepenalty\@M
+    \chapterfont\hfill #1\par\nobreak
+    \vskip 2pc\protect\chunk@start@chapter@nonumber
+  }}
+
+
+\titleformat{\section}
+{\large\sffamily\bfseries}
+{\thesection}
+{1em}
+{}
+
+\titleformat{\subsection}
+{\large\sffamily\bfseries}
+{\thesubsection}
+{1em}
+{}
+
+\titleformat{\subsubsection}
+{\large\sffamily\bfseries}
+{\thesubsubsection}
+{1em}
+{}
+
+
+% adjust whitespace between code chunks
+% https://www.cs.tufts.edu/~nr/noweb/FAQ.html
+\def\nwendcode{\endtrivlist \endgroup}
+\let\nwdocspar=\smallbreak
+%\nwcodecommentsep=-10pt
+
+% avoid making the page numbers reset in mainmatter
+% https://tex.stackexchange.com/a/61473/14751
+\def\pagenumbering#1{%
+  %\global\c@page \@ne
+  \gdef\thepage{\csname @#1\endcsname
+   \c@page}}
+
+\newcommand\define[1]{\textbf{``#1''}}
+\newcommand{\Caret}{\char`\^}
+
