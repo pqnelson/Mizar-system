@@ -1,0 +1,2008 @@
+% -*- mode: poly-noweb; noweb-code-mode: opascal-mode; -*-
+
+\chapter{Correlator}
+
+
+<<kernel/correl.pas>>=
+(******************************************************************************
+   This file is part of the Mizar system.
+   Copyright (c) Association of Mizar Users.
+   License terms: GNU General Public License Version 3 or any later version.
+******************************************************************************)
+
+unit correl;
+
+interface
+<<Correlator interface>>
+
+  
+implementation
+<<Correlator implementation>>
+end;
+@
+
+\section{Interface}
+<<Correlator interface>>=
+uses errhan,limits,builtin,mobjects,inout,roundcl,formats,numbers,enums,mscanner;
+
+var ItIsChecker: boolean = false;
+    DisposingSuperclusters: boolean = false;
+
+<<Types for AST>>
+                   
+@ %def ItIsChecker DisposingSuperclusters
+
+<<Types for AST>>=
+<<Declare pointers for correlator types>>
+<<Define a term element>>
+<<Declare equality testing for objects>>
+<<Define cluster record type>>
+<<Define Expression Pointer type>>
+<<Define a correlator object>>
+<<Define a variable term object type>>
+<<Define a function term type>>
+<<Local functor term types>>
+<<Fraenkel term types>>
+<<``Qua'' term types>>
+<<Choice term types>>
+<<Type object class>>
+<<Formula object>>
+<<Predicate formula objects>>
+<<Local predicate formula object>>
+<<Qualified formula object>>
+<<Negated formula object>>
+<<Binary formula object>>
+<<Conjunction formula type>>
+<<Universally quantified formula object>>
+<<Uniqueness formula object>>
+<<Flex formula objects>>
+{---------------------------------------------------------------------}
+<<Attribute object>>
+<<Collection of attributes>>
+<<Loci substitution type>>
+
+@ 
+
+<<Declare pointers for correlator types>>=
+   TrmPtr = ^TrmObj;
+   AttrPtr = ^ AttrObj;
+   TypPtr = ^TypObj;
+   FrmPtr = ^FrmObj;
+   AttrCollectionPtr = ^MAttrCollection;
+   TrmList = ^TrmElem;
+@ %def TrmPtr AttrPtr TypPtr FrmPtr AttrCollectionPtr TrmList
+
+\subsection{Terms}
+
+<<Define a term element>>=
+   TrmElem = record NextTrm: TrmList; XTrmPtr: TrmPtr end;
+@ %def TrmElem
+
+<<Declare equality testing for objects>>=
+   DoInTrm = procedure (var fTrm: TrmPtr);
+   EqualAttrs = function (aAttr1,AAttr2: AttrPtr): boolean;
+   EqualTyps = function (aTyp1,aTyp2: TypPtr): boolean;
+   EqualTrms = function (aTrm1,aTrm2: TrmPtr): boolean;
+   EqualFrms = function (aFrm1,aFrm2: FrmPtr): boolean;
+@ %def DoInTrm EqualAttrs EqualTyps EqualTrms EqualFrms
+
+<<Define cluster record type>>=
+   ClusterRec =
+    record
+      Lower,Upper: AttrCollectionPtr;
+    end;
+@ %def ClusterRec
+
+<<Define Expression Pointer type>>=
+   ExprPtr = ^CorrObj;
+@ %def ExprPtr
+
+<<Define a correlator object>>=
+   ExprPtr = ^CorrObj;
+   CorrObj =
+    object(MObject)
+      nPattNr: integer;
+      constructor Init;
+      constructor InitP(aPattNr:integer);
+      destructor Done; virtual;
+    end;
+@ %def CorrObj
+
+<<Define a term object type>>=
+   TrmObj =
+    object(CorrObj)
+      TrmSort: char; TrmInfo: integer;
+      constructor Init;
+      constructor InitP(aPattNr:integer);
+      destructor Done; virtual;
+    end;
+@ %def TrmObj
+
+<<Define a variable term object type>>=
+   VarTrmPtr = ^VarTrmObj;
+   VarTrmObj =
+     object(TrmObj)
+      VarNr: integer;
+      constructor Init;
+      constructor InitP(aPattNr:integer);
+      destructor Done; virtual;
+     end;
+@ %def VarTrmPtr VarTrmObj
+
+<<Define a function term type>>=
+   FuncTrmPtr = ^FuncTrmObj;
+   FuncTrmObj =
+     object(TrmObj)
+      FuncNr: integer;
+      FuncArgs: TrmList;
+      constructor Init;
+      constructor InitP(aPattNr:integer);
+      destructor Done; virtual;
+     end;
+@ %def FuncTrmPtr FuncTrmObj
+
+<<Local functor term types>>=
+   LocFuncTrmPtr = ^LocFuncTrmObj;
+   LocFuncTrmObj =
+     object(FuncTrmObj)
+       FuncExp: TrmPtr;
+      constructor Init;
+      constructor InitP(aPattNr:integer);
+      destructor Done; virtual;
+     end;
+@ %def LocFuncTrmPtr LocFuncTrmObj
+
+<<Fraenkel term types>>=
+   FraenkelTrmPtr = ^FraenkelTrmObj;
+   FraenkelTrmObj =
+     object(TrmObj)
+      LambdaArgs: MCollection;
+      LambdaScope: TrmPtr; Compr: FrmPtr;
+      nIdents: IntSequence; // identifiers of vars (0 for unknown)
+      constructor Init;
+      constructor InitP(aPattNr:integer);
+      destructor Done; virtual;
+     end;
+@ %def FraenkelTrmPtr FraenkelTrmObj
+
+<<``Qua'' term types>>=
+   QuaTrmPtr = ^QuaTrmObj;
+   QuaTrmObj =
+     object(TrmObj)
+      TrmProper: TrmPtr; Qua: TypPtr;
+      constructor Init;
+      constructor InitP(aPattNr:integer);
+      destructor Done; virtual;
+     end;
+@ %def QuaTrmPtr QuaTrmObj
+
+<<Choice term types>>=
+   ChoiceTrmPtr = ^ChoiceTrmObj;
+   ChoiceTrmObj =
+     object(TrmObj)
+       ChoiceTyp: TypPtr;
+      constructor Init(aTyp:TypPtr);
+      constructor InitP(aPattNr:integer; aTyp:TypPtr);
+      destructor Done; virtual;
+     end;
+@
+
+<<Type object class>>=
+   TypObj =
+     object(CorrObj)
+      LowerCluster,UpperCluster: AttrCollectionPtr;
+      ModNr: integer;
+      TypSort: char;
+      ModArgs: TrmList;
+      constructor Init(fSort:char; fLAttr,fUAttr: AttrCollectionPtr;
+                       fMod:integer; fArgs:TrmList);
+      constructor InitP(fSort:char; fLAttr,fUAttr: AttrCollectionPtr;
+                        fMod:integer; fArgs:TrmList; fPattNr:integer);
+      destructor Done; virtual;
+
+       { metody statyczne }
+      function CopyType: TypPtr;
+      function InstTyp(fTrmList:TrmList):TypPtr;
+      procedure RoundUp;
+      function DecreasingAttrs(fTarget:TypPtr; aEqAttr: EqualAttrs):boolean;
+      procedure AdjustTyp(var fMode:integer; var fArgs:TrmList);
+      function EqRadices(fTyp2:TypPtr):boolean;
+      procedure WithinType(P:DoInTrm);
+      function WidenToStruct: TypPtr;
+      function WideningOf(SourceTyp: TypPtr): TypPtr;
+      function IsWiderThan(fTypPtr: TypPtr): boolean;
+      function Widening: TypPtr;
+      {!!!!! procedure WidenOnce;}
+     end;
+@ %def TypObj
+
+\subsection{Formulas}
+
+<<Formula object>>=
+   FrmObj =
+    object(CorrObj)
+     FrmSort: char;
+     function CopyFormula: FrmPtr; virtual;
+     procedure WithinFrm; virtual;
+     procedure SetPidIfKind( aKind:char; aPattNr:integer);
+    end;
+@ %def FrmObj
+
+<<Predicate formula objects>>=
+   PredFrmPtr = ^PredFrmObj;
+   PredFrmObj =
+    object(FrmObj)
+      PredNr: integer; PredArgs: TrmList;
+     constructor Init(fPredKind:char; fPredNr:integer; fPredArgs:TrmList);
+     constructor InitP(fPredKind:char; fPredNr:integer;
+                       fPredArgs:TrmList; fPattNr:integer);
+     destructor Done; virtual;
+     function CopyFormula: FrmPtr; virtual;
+     procedure WithinFrm; virtual;
+    end;
+@ %def PredFrmPtr PredFrmObj
+
+<<Local predicate formula object>>=
+   LocPredFrmPtr = ^LocPredFrmObj;
+   LocPredFrmObj =
+    object(PredFrmObj)
+      PredExp: FrmPtr;
+     constructor Init(aPredNr:integer; aPredArgs:TrmList; aExp: FrmPtr);
+     constructor InitP(aPredNr:integer; aPredArgs:TrmList;
+                       aExp: FrmPtr; aPattNr:integer);
+     destructor Done; virtual;
+     function CopyFormula: FrmPtr; virtual;
+     procedure WithinFrm; virtual;
+    end;
+@ %def LocPredFrmPtr LocPredFrmObj
+
+<<Qualified formula object>>=
+   QualFrmPtr = ^QualFrmObj;
+   QualFrmObj =
+    object(FrmObj)
+      QualTrm: TrmPtr; QualTyp: TypPtr;
+     constructor Init(fQualTrm: TrmPtr; fQualTyp: TypPtr);
+     constructor InitP(fQualTrm: TrmPtr; fQualTyp: TypPtr; fPattNr:integer);
+     destructor Done; virtual;
+     function CopyFormula: FrmPtr; virtual;
+     procedure WithinFrm; virtual;
+    end;
+@ %def QualFrmPtr QualFrmObj
+
+<<Negated formula object>>=
+   NegFrmPtr = ^NegFrmObj;
+   NegFrmObj =
+    object(FrmObj)
+      NegArg: FrmPtr;
+     constructor Init(fNegArg: FrmPtr);
+     constructor InitP(fNegArg: FrmPtr; fPattNr:integer);
+     destructor Done; virtual;
+     function CopyFormula: FrmPtr; virtual;
+     procedure WithinFrm; virtual;
+    end;
+@ %def NegFrmPtr NegFrmObj
+
+<<Binary formula object>>=
+   BinFrmPtr = ^BinFrmObj;
+   BinFrmObj =
+    object(FrmObj)
+      nLeftArg,nRightArg: FrmPtr;
+     constructor Init(aFrmSort:char; aLeftArg,aRightArg:FrmPtr);
+     destructor Done; virtual;
+     function CopyFormula: FrmPtr; virtual;
+     procedure WithinFrm; virtual;
+    end;
+@ %def BinFrmPtr BinFrmObj
+
+<<Conjunction formula type>>=
+   ConjFrmPtr = ^ConjFrmObj;
+   ConjFrmObj =
+    object(FrmObj)
+      Conjuncts: MCollection;
+     constructor Init(const fConjuncts: MCollection);
+     constructor InitP(const fConjuncts: MCollection; fPattNr:integer);
+     destructor Done; virtual;
+     function CopyFormula: FrmPtr; virtual;
+     procedure WithinFrm; virtual;
+    end;
+@ %def ConjFrmPtr ConjFrmObj
+
+<<Universally quantified formula object>>=
+   UnivFrmPtr = ^UnivFrmObj;
+   UnivFrmObj =
+    object(FrmObj)
+      nVarId: integer;
+      Quantified: TypPtr; Scope: FrmPtr;
+     constructor Init(fSort:char; fQuantified: TypPtr; fScope: FrmPtr);
+     constructor InitP(fQuantified: TypPtr; fScope: FrmPtr; fPattNr:integer);
+     constructor InitI(aQuantified: TypPtr; aScope: FrmPtr; aVarId:integer);
+     destructor Done; virtual;
+     function CopyFormula: FrmPtr; virtual;
+     procedure WithinFrm; virtual;
+    end;
+@ %def UnivFrmPtr UnivFrmObj
+
+<<Uniqueness formula object>>=
+   UniqFrmPtr = ^UniqFrmObj;
+   UniqFrmObj =
+    object(FrmObj)
+     constructor Init(fKind: char);
+     constructor InitP(fKind: char; fPattNr:integer);
+     function CopyFormula: FrmPtr; virtual;
+     procedure WithinFrm; virtual;
+    end;
+@ %def UniqFrmPtr UniqFrmObj
+
+It's unclear to me how flex formulas are used, but they're a ``thing''.
+
+<<Flex formula objects>>=
+   FlexFrmPtr = ^FlexFrmObj;
+   FlexFrmObj =
+    object(FrmObj)
+     nLeftOrigFrm,nRightOrigFrm:FrmPtr;
+     nLeftTrm,nRightTrm:TrmPtr;
+     nExpansion:FrmPtr; // generated formula (univ or exist)
+     constructor Init(fLeftOrigFrm,fRightOrigFrm:FrmPtr; fLeftTrm,fRightTrm:TrmPtr);
+     constructor InitD(fLeftOrigFrm,fRightOrigFrm,fExpansion:FrmPtr; fLeftTrm,fRightTrm:TrmPtr);
+     function CopyFormula: FrmPtr; virtual;
+     procedure WithinFrm; virtual;
+    end;
+@ %def FlexFrmPtr FlexFrmObj
+
+\subsection{Attributes}
+
+<<Attribute object>>=
+   AttrObj = Object(CorrObj)
+      fAttrNr: integer;
+      fNeg: word;
+      fAttrArgs: Trmlist;
+      fCollected: boolean;
+     constructor Init(aNeg:byte; aAttr:integer; aArgs:TrmList);
+     constructor InitP(aNeg:byte; aAttr:integer;
+                       aArgs:TrmList; aPattNr:integer);
+     destructor Done; virtual;
+     function CopyAttribute: AttrPtr;
+     procedure AdjustAttr(var aAttrNr:integer; var aArgs:TrmList);
+     function AdjustedAttrNr: integer;
+     procedure WithinAttr(P:DoInTrm);
+   end;
+@ %def AttrObj
+
+<<Collection of attributes>>=
+   MAttrCollection = object(MSortedCollection)
+      fConsistent: boolean;
+     constructor Init(ALimit, ADelta: Integer);
+     function Compare(Key1, Key2: Pointer): Integer; virtual;
+     procedure FreeItem(Item: Pointer); virtual;
+     destructor Refuted; virtual;
+     function GetAttr(aAttrNr: integer; aAttrArgs: TrmList): AttrPtr; virtual;
+     procedure AtInsert(Index: Integer; Item: Pointer); virtual;
+     procedure InsertAttr(aAttrNr:integer; aNeg:byte; aArgs: TrmList); virtual;
+     procedure Insert(aItem: Pointer); virtual;
+     procedure WithinAttrCollection(P:DoInTrm);
+     procedure RoundUpWith(aTyp:TypPtr);
+     procedure ClearPids; virtual;
+     constructor CopyAll(aOrigin:AttrCollectionPtr);
+     constructor CopyAllowed(aTyp:TypPtr; aOrigin:AttrCollectionPtr);
+     procedure EnlargeBy(aAnother:MListPtr); virtual;
+     function IsSubsetOf(aClu: AttrCollectionPtr; aEqAttr: EqualAttrs): boolean; virtual;
+     function IsEqualTo(aClu: AttrCollectionPtr; aEqAttr: EqualAttrs): boolean; virtual;
+   end;
+@ %def MAttrCollection
+
+<<Loci substitution type>>=
+ LociSubstitution =  array[1..2*MaxArgNbr] of TrmPtr;
+@ %def LociSubstitution
+
+We have some more public-facing function declarations, checking if a
+type is reachable, comparing functors and clusters, and a procedure to
+skip loci in a predicate.
+
+<<Correlator interface>>=
+function TypReachable( fWider,fNarrower: TypPtr): boolean;
+function CmpFuncTrm( fTrm1,fTrm2: TrmPtr): integer;
+function CmpFuncCluster(fCl1,fCl2: Pointer): integer;
+
+procedure SkipLocPred(var aFrm: FrmPtr);
+@
+
+We have a few global variables:
+<<Correlator interface>>=
+var
+    ItTyp:TypPtr;
+    LocArgTyp: array[1..2*MaxArgNbr+1] of TypPtr;
+    BoundVarNbr: integer;
+    FreeVarType: MList;
+    BoundVar: array[1..MaxVarNbr] of TypPtr;
+    FixedVar: array[1..MaxVarNbr] of
+     record nIdent: integer;
+      nTyp: TypPtr;
+      nExp: boolean;
+      nDef: TrmPtr;
+      nSkelConstNr: integer;
+     end;
+    CurSchFuncTyp: MCollection;
+
+@ %def ItTyp LocArgTyp BoundVarNbr FreeVarType BoundVar FixedVar CurSchFuncTyp
+
+We also have constant definitions, which are represented in the AST by
+its own type.
+
+<<Correlator interface>>=
+type
+  ConstDefPtr = ^ConstDefObj;
+  ConstDefObj = object(MObject)
+    fDef: TrmPtr;
+    fEqConst: NatSet;
+    nSetting: integer;
+    fTyp: TypPtr;
+    fDetermined: boolean;
+    fNumericValue: RComplex;
+   constructor Init(aDef: TrmPtr; aTyp: TypPtr);
+   destructor Done; virtual;
+  end;
+@ %def ConstDefPtr ConstDefObj
+
+<<Correlator interface>>=
+
+var
+    InferConstDef: MSortedExtList;
+    InferConsts: IntSet;
+    gOnlyConstants: boolean = true;
+  { Zmienna ta jest uzywana do kontroli, czy term moze byc kolekcjonowany,
+    tzn. czy sklada sie jedynie ze stalych.
+  }
+  { This variable is used to check whether a term can be collected,
+    i.e. whether it consists only of constants. }
+<<More AST classes>>
+@ %def InferConstDef InferConsts gOnlyConstants
+
+\subsection{More AST Classes}
+
+<<More AST classes>>=
+type
+<<Arity object>>
+<<Functor definition object>>
+<<Local predicate definition object>>
+
+var
+  LocFuncDef,LocPredDef: MList;
+
+type
+<<Properties AST node>>
+<<Constructor AST Node>>
+<<Constructor type node>>
+<<Aggregated constructor Node>>
+<<Pattern AST node>>
+
+var
+ Constr: array[ConstructorsKind] of MCollection;
+ ConstrBase: ConstrIntArr;
+
+{ Registering CLUSTERS }
+type
+<<AST nodes for registering clusters>>
+@ %def LocFuncDef LocPredDef Constr ConstrBase
+
+<<Arity object>>=
+  ArityObj =
+    object(MObject)
+      nId: integer;
+      fPrimaries: MList;
+     constructor Init;
+     destructor Done; virtual;
+    end;
+@ %def ArityObj
+
+<<Functor definition object>>=
+  FuncDefPtr = ^FuncDefObj;
+  FuncDefObj =
+    object(ArityObj)
+      fFuncDef: TrmPtr;
+      fFuncTyp: TypPtr;
+     constructor Init(aId:integer; var aPrimArgs: MList; aFuncDef: TrmPtr; aFuncTyp: TypPtr);
+     destructor Done; virtual;
+    end;
+@ %def FuncDefPtr FuncDefObj
+
+<<Local predicate definition object>>=
+  LocPredDefPtr = ^LocPredDefObj;
+  LocPredDefObj =
+    object(ArityObj)
+      fPredDef: FrmPtr;
+     constructor Init(aId:integer; var aPrimArgs: MList; aPredDef: FrmPtr);
+     destructor Done; virtual;
+    end;
+@ %def LocPredDefPtr LocPredDefObj
+
+<<Properties AST node>>=
+   PropertySet = set of PropertyKind;
+   PropertiesRec =
+    record Properties: set of PropertyKind; nFirstArg,nSecondArg: integer end;
+@ %def PropertySet PropertiesRec
+
+<<Constructor AST Node>>=
+   ConstrPtr = ^ConstrObj;
+   ConstrObj = object(MObject)
+    fConstrKind: ConstructorsKind;
+    fArticle: string;   	// article where defined
+    fAbsNr: integer;		// absolute nr (i.e. in its article)
+    nPrimaries: MCollection;   	// list of arguments
+    fStructLoci: NatFunc;	// not used yet
+    fWhichConstrNr:integer;	// nr. of its redefined constr (or 0)
+    fSuperfluous:byte;		// nr. of arguments added to the redefined constr.
+    fProperties: PropertySet;
+    fFirstArg,fSecondArg: integer;// for fProperties
+   constructor InitInternal(aKind: ConstructorsKind; aNr: integer;
+                            aArticle: string);
+   constructor Init(aKind: ConstructorsKind; aNr: integer;
+                    aArticle: string);
+   constructor InitForPattern(aKind: ConstructorsKind; aNr: integer;
+                              aArticle: string; const aPrimArgs:MList);
+   destructor Done; virtual;
+   procedure SetRedef( aWhich,aSuperfluous:integer );
+   procedure SetProperties(aProperties: PropertiesRec);
+   procedure GetProperties(var aProperties: PropertiesRec);
+  end;
+@ %def ConstrPtr ConstrObj
+
+<<Constructor type node>>=
+ ConstrTypPtr = ^ConstrTypObj;
+ ConstrTypObj =
+  object(ConstrObj)
+    fConstrTyp:TypPtr;
+   constructor Init(aKind: ConstructorsKind; aNr: integer;
+                    aArticle: string);
+   constructor InitForPattern(aKind: ConstructorsKind; aNr: integer;
+                              aArticle: string;
+                              const aPrimArgs: MList; fTyp:TypPtr);
+   destructor Done; virtual;
+   procedure RoundUp;
+  end;
+@ %def ConstrTypPtr ConstrTypObj
+
+<<Struct AST node>>=
+ StructConstrPtr = ^StructConstrObj;
+ StructConstrObj =
+  object(ConstrObj)
+   fPrefixes: MCollection;
+   fStructModeAggrNr: integer;	// nr of the corresponding coAggregate
+   fFields:NatSetPtr;	       	// probably selectors
+   constructor Init(aNr: integer; aArticle: string);
+   destructor Done; virtual;
+   constructor InitForPattern(aNr: integer; aArticle: string;
+                              const aPrimArgs: MList);
+  end;
+@ %def StructConstrPtr StructConstrObj
+
+<<Aggregated constructor Node>>=
+ AggrConstrPtr = ^AggrConstrObj;
+ AggrConstrObj =
+  object(ConstrTypObj)
+     fAggregBase: integer;	// nr. of "over" arguments (they come first)
+     fAggrColl:PCollection; 	// contains numbers (PIntItems) of selectors
+   constructor Init(aNr: integer; aArticle: string);
+   destructor Done; virtual;
+   constructor InitForPattern(aNr: integer; aArticle: string;
+                              const aPrimArgs: MList; fTyp:TypPtr);
+  end;
+@ %def AggrConstrPtr AggrConstrObj
+
+<<Pattern AST node>>=
+  PatternPtr = ^PatternObj;
+  PatternObj = object(MObject)
+   fKind: NotationKind;
+   fArticle: string;   	// article where defined
+   fAbsNr: integer;     // absolute nr (i.e. in its article)
+   fFormNr: integer;	// fFormNr is a number in gFormats, while
+   fFormat: FormatPtr;	// fFormat is the format pointer directly -
+   rConstr: Lexem;	// - only one of them should be set
+   fRedefNr: integer;     // relative number of origin for synonyms/antonyms
+   fPrimTypes: MList;
+   Visible:IntSequence;
+   fAntonymic: boolean;
+   Expansion: TypPtr;
+   constructor Init( aKind: NotationKind; aNr: integer; aArticle: string);
+   destructor Done; virtual;
+  end;
+@ %def PatternPtr PatternObj
+
+We have a number of pointers for registering clusters.
+<<AST nodes for registering clusters>>=
+ ClusterPtr = ^ClusterObj;
+ RClusterPtr = ^RClusterObj;
+ CClusterPtr = ^CClusterObj;
+ FClusterPtr = ^FClusterObj;
+<<Cluster AST node>>
+<<RCluster Node>>
+<<CCluster node>>
+<<FCluster node>>
+@ %def ClusterPtr RClusterPtr CClusterPtr FClusterPtr
+
+<<Cluster AST node>>=
+ ClusterObj =
+  object(MObject)
+   nClusterKind: ClusterKind;
+   nPrimaryList: MCollection;
+   nConsequent: ClusterRec;
+   nClusterType:TypPtr;
+   nArticle: string;   	// article where defined
+   nAbsNr: integer;     // absolute nr (i.e. in its article)
+   constructor Init(aNr: integer; aArticle: string; const aCons:ClusterRec; var aColl:MCollection);
+   destructor Done; virtual;
+  end;
+@ %def ClusterObj
+
+Registered clusters.
+<<RCluster Node>>=
+ RClusterObj =
+  object(ClusterObj)
+   constructor Init(aNr: integer; aArticle: string; const aCons:ClusterRec; var aColl:MCollection; aTyp:TypPtr);
+   constructor RegisterCluster(aNr: integer; aArticle: string; aClu:AttrCollectionPtr; var fPrim:MCollection; fTyp:TypPtr);
+   destructor Done; virtual;
+  end;
+@ %def RClusterObj
+
+Conditional clusters.
+<<CCluster node>>=
+ CClusterObj =
+  object(ClusterObj)
+   nAntecedent: AttrCollectionPtr;
+   constructor Init(aNr: integer; aArticle: string; aAntec:AttrCollectionPtr; const aCons: ClusterRec;
+                    var aColl:MCollection;
+                    aTyp:TypPtr);
+   constructor RegisterCluster(aNr: integer; aArticle: string; aClu1,aClu2:AttrCollectionPtr; var fPrim:MCollection; fTyp:TypPtr);
+   destructor Done; virtual;
+  end;
+@ %def CClusterObj
+
+Functor clusters.
+<<FCluster node>>=
+ FClusterObj =
+  object(ClusterObj)
+   nClusterTerm: TrmPtr;
+   constructor Init(aNr: integer; aArticle: string; const aCons: ClusterRec; var aColl:MCollection; aTrm:TrmPtr;
+                    aTyp:TypPtr);
+   constructor RegisterCluster(aNr: integer; aArticle: string; aClu:AttrCollectionPtr; var fPrim:MCollection; fTrm:TrmPtr;
+                        aTyp:TypPtr);
+   destructor Done; virtual;
+  end;
+@ %def FClusterObj
+
+We now have the method to round-up clusters:
+<<Correlator interface>>=
+function RoundUpWith(fCluster: FClusterPtr;
+                     fTrm:TrmPtr; fTyp: TypPtr;
+                     var fClusterPtr: AttrCollectionPtr): boolean;
+@
+
+More global variables:
+<<Correlator interface>>=
+ const MaxRedefNbr	= MaxFuncNbr;
+ var
+    gDefBase:integer;
+    RegisteredCluster: MExtList;
+    FunctorCluster: MSortedExtList;
+    ConditionalCluster: MCondClList;
+    gAttrCollected: boolean = false;
+    gAttrCollection: MList;
+    RegClusterBase,CondClusterBase,FuncClusterBase,RegPropertiesBase:integer;
+    gSubstTrm: LociSubstitution;
+    NonZeroTyp: TypPtr;
+@ %def MaxRedefNbr gDefBase RegisteredCluster FunctorCluster ConditionalCluster gAttrCollected gAttrCollection RegClusterBase CondClusterBase FuncClusterBase RegPropertiesBase gSubstTrm NonZeroTyp
+
+There's a lot of public-facing function declarations:
+
+<<Correlator interface>>=
+function CreateArgList(aLength:integer): TrmList;
+function CreateArgList1: TrmList;
+procedure DisposeSubstTrm;
+
+procedure InitConstructors;
+procedure DisposeConstructors;
+
+procedure ChangeToLoci(var fTrm:TrmPtr);
+
+function NewTrmList ( fTrm:TrmPtr; fTrmList:TrmList ):TrmList;
+function AddToTrmList ( fTrmList:TrmList; fTrm:TrmPtr):TrmList;
+
+function NewVarTrm ( fSort:char; fNr:integer ):VarTrmPtr;
+function NewFuncTrm ( fFunc:integer; fArgs: TrmList ):TrmPtr;
+function NewLocFuncTrm(fSort:char;fFunc:integer;fArgs:TrmList):FuncTrmPtr;
+function NewPrivFuncTrm(aFunc:integer;aArgs:TrmList; aExp:TrmPtr):FuncTrmPtr;
+function NewItTrm: TrmPtr;
+function NewFraenkelTrm(fTrm:TrmPtr;fFrm:FrmPtr; var fColl:MCollection): FraenkelTrmPtr;
+function NewFraenkelTrmI(fTrm:TrmPtr;fFrm:FrmPtr; var fColl:MCollection; var fIdents:IntSequence): FraenkelTrmPtr;
+function NewQuaTrm(fTrmProper:TrmPtr; fTyp:TypPtr):TrmPtr;
+function NewChoiceTrm(aTyp: TypPtr): TrmPtr;
+function NewInCorTrm: TrmPtr;
+
+function NewEmptyCluster: AttrCollectionPtr;
+function NewStandardTyp (fSort:char; fLAttr,fUAttr: AttrCollectionPtr;
+                         fMod:integer; fArgs:TrmList ):TypPtr;
+function NewInCorTyp: TypPtr;
+
+function NewVerum:FrmPtr;
+function NewNeg ( fArg:FrmPtr ):FrmPtr;
+function NewNegDis ( fArg:FrmPtr ):FrmPtr;
+function NewUniv ( fQuant:TypPtr; fScope:FrmPtr ):FrmPtr;
+function NewUnivI(aVarID:integer; aQuant:TypPtr; aScope:FrmPtr):FrmPtr;
+function NewPredFrm ( fSort:char; fPred:integer; fArgs:TrmList; fPattNr:integer ):FrmPtr;
+function NewLocPredFrm ( aPred:integer; aArgs:TrmList; aExp:FrmPtr ):FrmPtr;
+function NewQualFrm ( fTrm:TrmPtr; fTyp:TypPtr ):FrmPtr;
+function NewEqFrm ( fLeft,fRight:TrmPtr ):FrmPtr;
+function NewInCorFrm: FrmPtr;
+
+function NewExis(fTyp:TypPtr; fFrm:FrmPtr):FrmPtr;
+function NewConjFrm (const fList:MCollection):FrmPtr;
+function NewConj (Arg1,Arg2:FrmPtr ):FrmPtr;
+function NewImpl(fArg1,fArg2:FrmPtr):FrmPtr;
+function NewBicond ( Arg1,Arg2:FrmPtr ):FrmPtr;
+function NewDisj(fArg1,fArg2:FrmPtr):FrmPtr;
+function NewFlexConj (Arg1,Arg2:FrmPtr):FrmPtr;
+function NewFlexDisj(fArg1,fArg2:FrmPtr):FrmPtr;
+function NewFlexFrm(fOrigFrm1,fOrigFrm2,fExpansion:FrmPtr; fLeftTrm,fRightTrm:TrmPtr):FrmPtr;
+function NewExpansion(fTyp:TypPtr; fLeftGuardFrm,fRightGuardFrm,fFrm:FrmPtr):FrmPtr;
+function FraenkelFrm(fTrm,fOpFr:TrmPtr): FrmPtr;
+
+function LastElem(fTrmList:TrmList):TrmList;
+function LastArg(fTrmList:TrmList):TrmPtr;
+function NbrOfElem(fL: TrmList): integer;
+procedure GetArgs1(fFirst:integer; var fFirstTrm:TrmPtr; fList:TrmList);
+procedure GetArgs2(fFirst,fSecond:integer; var fFirstTrm,fSecondTrm:TrmPtr;
+                  fList:TrmList);
+procedure GetBinArgs(aFrm:FrmPtr; var aLeft,aRight: TrmPtr);
+function SwitchArgs(fFirst,fSecond:integer; fList:TrmList): TrmList;
+function SwapArguments(fList:TrmList; fFirst,fSecond:word):TrmList;
+procedure RemoveQua(fTL: TrmList);
+
+function CopyTerm ( fTrm:TrmPtr ):TrmPtr;
+function CopyTermList ( fTL:TrmList ):TrmList;
+function CopyTermList1 ( fTL:TrmList ):TrmList; {kopia bez ostatniego elementu}
+function CopyCluster(aClu: AttrCollectionPtr): AttrCollectionPtr;
+function AdjustedType ( fTyp:TypPtr ):TypPtr;
+procedure CopyTypeColl(const aSrc: MList; var aTrg: MList);
+
+function CopyExpTrm ( fTrm:TrmPtr ):TrmPtr;
+function CopyExpTyp(aTyp:TypPtr): TypPtr;
+function CopyExpFrm(fFrm:FrmPtr):FrmPtr;
+
+function OriginalNr( c:ConstructorsKind; aNr:integer ):integer;
+function AdjustedNr( c:ConstructorsKind; aNr:integer ):integer;
+function AdjustedFuncNr(aTrm:TrmPtr):integer;
+
+function MotherStructNr( fSelectNr:integer ):integer;
+
+procedure AdjustTrm ( fTrm:TrmPtr; var fFunc:integer; var fArgs:TrmList );
+procedure AdjustFrm ( fFrm:PredFrmPtr; var fPred:integer; var fArgs:TrmList );
+procedure AdjustAttrFrm ( fFrm:PredFrmPtr; var fAttr:integer; var fArgs:TrmList );
+function AdjustTrmList(aKind:char; aNr:integer; aTrmList:TrmList):TrmList;
+
+function EquateTrmsLists(fTrm,aTrm:TrmList; aEqTrms: EqualTrms): boolean;
+
+function EqAttr(fAttr1, fAttr2: AttrPtr): boolean;
+function EqTrm ( fTrm1,fTrm2:TrmPtr ):boolean;
+function EqTyp ( fTyp1,fTyp2:TypPtr ):boolean;
+function EqFrm ( fFrm1,fFrm2:FrmPtr ):boolean;
+function EqTrmList(fTL1,fTL2: TrmList): boolean;
+
+function StrictEqTyp(fTyp1,fTyp2:TypPtr):boolean;
+function StrictEqTrm ( fTrm1,fTrm2:TrmPtr ):boolean;
+function StrictEqFrm ( fFrm1,fFrm2:FrmPtr ):boolean;
+function StrictEqAttr(fAttr1, fAttr2: AttrPtr): boolean;
+
+procedure InitInst{(const aSubstTrm: LociSubstitution)};
+procedure InitInstList(aTrmList:TrmList);
+procedure StopInst;
+function InstCluster(aClu: AttrCollectionPtr; aTrmList:TrmList): AttrCollectionPtr;
+function InstTrm ( fTrm:TrmPtr; fTrmList:TrmList):TrmPtr;
+function InstFrm ( fFrm:FrmPtr; fTrmList:TrmList):FrmPtr;
+function InstQual( fFrm:FrmPtr; fTrmList:TrmList; fTrm:TrmPtr ):FrmPtr;
+function InstTrmInTyp ( fTyp:TypPtr; fTrm:TrmPtr ):TypPtr;
+function InstSubstTrm ( fTrm:TrmPtr):TrmPtr;
+function InstSubstFrm ( fFrm:FrmPtr):FrmPtr;
+
+var IncBounVarNbr: boolean = false;
+procedure WithinTerm ( fTrm:TrmPtr; P:DoInTrm );
+procedure WithinFormula ( fFrm:FrmPtr; P:DoInTrm );
+
+procedure WithinTypeColl (var fColl:MCollection; P:DoInTrm );
+procedure WithinCluster ( fCluster:ClusterPtr; P:DoInTrm );
+
+procedure ExpandInferConsts(var fTrm:TrmPtr);
+
+procedure ExpPrivFuncInTrm(var fTrm:TrmPtr);
+
+function CopyTrmType(fTrm:TrmPtr): TypPtr;
+function RoundUpTrmType(fTrm:TrmPtr): TypPtr;
+function GetTrmType(fTrm:TrmPtr):TypPtr;
+
+function EsAttr(fAttr1, fAttr2: AttrPtr): boolean;
+function EsAttrRev(fAttr1, fAttr2: AttrPtr): boolean;
+function EsTyp(fTyp,aTyp: TypPtr):boolean;
+function EsTrmList(fTrm1,fTrm2:TrmList):boolean;
+function EsTrm(fTrm,aTrm:TrmPtr):boolean;
+function CompEsTyp(fTyp,aTyp:TypPtr; fExactly:boolean): boolean;
+function CheckLociTypes(const fList:MList):boolean;
+function CheckLociTypesN(const fList:MList):boolean;
+function CheckTypes(aPattern:PatternPtr; aTrmList:TrmList): boolean;
+function Agree(fTrmList:TrmList; const fTypList:MList):boolean;
+
+function AttrEquals(Key1, Key2: AttrPtr): boolean;
+
+var gStrictCompare: boolean = true;
+function CompAbsAttr(aAttr1, aAttr2: AttrPtr): Integer;
+function CompAttr(aAttr1, aAttr2: pointer): Integer;
+function ExtCompAttr(aAttr1, aAttr2: pointer): Integer;
+function CompRdTrms(fTrm1,fTrm2: pointer):integer;
+function CompTrms(fTrm1,fTrm2: pointer):integer;
+
+function ReconSelectTrm(fSelector:integer; fLastArg:TrmPtr; fTyp:TypPtr):TrmPtr;
+function ReconAggregTrm(fStruct:integer; fLastArg:TrmPtr; fTyp:TypPtr):TrmPtr;
+
+function EqualClusters(fTyp1,fTyp2:TypPtr; aEqAttr: EqualAttrs): boolean;
+
+procedure DisposeTrm(fTrm:TrmPtr);
+procedure DisposeTrmList(fTrmList:TrmList);
+procedure DisposeListOfTerms(fList:TrmList);
+procedure DisposeTrmMList(var aList:MListPtr);
+
+procedure InsertArgument(fInt:integer);
+
+procedure ChangeBound(var fTrm: TrmPtr);
+procedure ChChangeBound(var fTrm: TrmPtr);
+var  gBoundBase: integer;
+procedure FrRenBound(var fTrm: TrmPtr);
+var gTrmList: TrmList;
+   gExactly: array[1..2*MaxArgNbr] of boolean;
+
+<<Parsing type declarations>>
+@ %def gBoundBase IncBounVarNbr gStrictCompare gTrmList gExactly
+
+\subsection{Parsing types}
+
+We have lexemes, and related types.
+
+<<Parsing type declarations>>=
+type
+<<Lexeme class>>
+<<Sorted lexeme list class>>
+<<Lexeme and list pair class>>
+<<Lexeme and list of lists class>>
+<<Collecting term type declarations>>
+
+@ 
+
+<<Lexeme class>>=
+ LexemPtr = ^LexemObj;
+ LexemObj = object (MObject)
+   fLexem: Lexem;
+  constructor Init(const alexem: Lexem);
+ end;
+@ %def LexemPtr LexemObj
+
+<<Sorted lexeme list class>>=
+ MSortedLexemList = object(MSortedList)
+  constructor Init(ALimit: Integer);
+  function IndexOfLexem(const aLexem: Lexem): Integer; virtual;
+  function ObjectOf(const alexem: Lexem): LexemPtr; virtual;
+ end;
+@ %def MSortedLexemList
+
+<<Lexeme and list pair class>>=
+ MLexemAndListPtr = ^MlexemAndList;
+ MLexemAndList = object(LexemObj)
+   fList: MList;
+  constructor Init(const alexem: Lexem);
+  destructor Done; virtual;
+ end;
+@ %def MLexemAndListPtr MlexemAndList
+
+<<Lexeme and list of lists class>>=
+ MLexemAndListList = object(MSortedLexemList)
+  constructor Init(ALimit: Integer);
+  procedure InsertAtLexem(aLexem: Lexem; aItem: Pointer);virtual;
+ end;
+@ %def MLexemAndListList
+
+<<Collecting term type declarations>>=
+{^ Kolekcjonowanie termow ^} {^ Collecting terms ^}
+
+ TTPairPtr = ^TTPairObj;
+ TTPairObj =
+  object(MObject)
+   nTermScope:integer;
+   nTrm: TrmPtr; nTyp: TypPtr;
+   constructor Init(fTrm:TrmPtr);
+   destructor Done; virtual;
+  end;
+ TTCollection =
+ object(MSortedCollection)
+  function Compare(Key1,Key2:pointer): integer; virtual;
+  function KeyOf(Item:pointer): pointer; virtual;
+ end;
+@ %def TTPairPtr TTPairObj TTCollection
+
+There are a few more declarations left in the interface.
+
+<<Correlator interface>>=
+var gTermCollection: TTCollection;
+    InCorrTrmList: TrmList;
+    gTermScope:integer=0;
+
+procedure MarkTermsInTTColl;
+function InsertTermInTTColl(fTrm:TrmPtr): integer;
+procedure RemoveTermsFromTTColl;
+
+{^ rozszerzanie structur ^} {^ extending structur ^}
+
+var gWidStruct: MCollection;
+    gWidStructFound: Boolean;
+    gTargetStructNr:integer;
+
+procedure WidenningPath(fStructNr:integer);
+
+const errBadTypeIds = 2583;
+
+function ReductionAllowed(fTrm1,fTrm2:TrmPtr):boolean; //true if fTrm2 is a strict subterm of fTrm1
+@ %def gWidStruct gWidStructFound gTargetStructNr errBadTypeIds
+
+\section{Implementation}
+
+<<Correlator implementation>>=
+
+uses lexicon,iocorrel,ellipses
+{$IFDEF MDEBUG} ,info,outinfo {$ENDIF}
+{$IFDEF DEBUG_ELLIPSES}{$IFNDEF MDEBUG} ,info,outinfo {$ENDIF}{$ENDIF}
+;
+
+
+<<Implement constructors for correlator classes>>
+<<Sorted Lexeme list implementation>>
+<<Lexeme and list implementations>>
+
+{v Kolekcjonowanie termow v} {v Collecting terms v}
+
+<<Collecting terms implementation>>
+
+<<Type--term dictionary>>
+@
+
+<<Implement constructors for correlator classes>>=
+procedure WithinTrm(var fTrm: TrmPtr); forward;
+
+{ Przerabianie termow na obiekty } { Converting terms into objects }
+
+constructor CorrObj.Init;
+begin
+   inherited Init;
+   nPattNr := 0;
+end;
+
+constructor CorrObj.InitP(aPattNr: integer);
+begin
+   Init;
+   nPattNr:= aPattNr;
+end;
+
+constructor TrmObj.Init;
+begin
+   inherited Init;
+   TrmInfo := 0;
+end;
+
+constructor TrmObj.InitP(aPattNr: integer);
+begin
+   Init;
+   nPattNr := aPattNr;
+end;
+
+constructor VarTrmObj.Init;
+begin
+   inherited Init;
+end;
+
+constructor VarTrmObj.InitP(aPattNr: integer);
+begin
+   Init;
+   nPattNr := aPattNr;
+end;
+
+constructor FuncTrmObj.Init;
+begin
+   inherited Init;
+end;
+
+constructor FuncTrmObj.InitP(aPattNr: integer);
+begin
+   Init;
+   nPattNr := aPattNr;
+end;
+
+constructor LocFuncTrmObj.Init;
+begin
+   inherited Init;
+end;
+
+constructor LocFuncTrmObj.InitP(aPattNr: integer);
+begin
+   Init;
+   nPattNr := aPattNr;
+end;
+
+constructor FraenkelTrmObj.Init;
+begin
+   inherited Init;
+   nIdents.Init(0);
+end;
+
+constructor FraenkelTrmObj.InitP(aPattNr: integer);
+begin
+   Init;
+   nPattNr := aPattNr;
+end;
+
+constructor QuaTrmObj.Init;
+begin
+   inherited Init;
+end;
+
+constructor QuaTrmObj.InitP(aPattNr: integer);
+begin
+   Init;
+   nPattNr := aPattNr;
+end;
+
+constructor ChoiceTrmObj.Init(aTyp: TypPtr);
+begin
+   inherited Init;
+   ChoiceTyp := aTyp;
+end;
+
+constructor ChoiceTrmObj.InitP(aPattNr: Integer; aTyp: TypPtr);
+begin
+   Init(aTyp);
+   nPattNr := aPattNr;
+end;
+@
+
+The lexemes can be compared with each other.
+
+<<Compare lexeme pointers>>=
+function CompareLexemPtr(aKey1, aKey2: Pointer): Integer;
+var
+   lInt: integer;
+begin
+   lInt:=CompareInt(ord(LexemPtr(aKey1)^.fLexem.Kind),ord(LexemPtr(aKey2)^.fLexem.Kind));
+   if lInt <> 0 then
+   begin
+      CompareLexemPtr:=lInt;
+      exit;
+   end;
+   lInt:=CompareInt(LexemPtr(aKey1)^.fLexem.Nr,LexemPtr(aKey2)^.fLexem.Nr);
+   if lInt <> 0 then
+   begin
+      CompareLexemPtr:=lInt;
+      exit;
+   end;
+   CompareLexemPtr := 0;
+end;
+@ %def CompareLexemPtr
+
+<<Implement constructors for correlator classes>>=
+<<Compare lexeme pointers>>
+
+constructor LexemObj.Init(const alexem: Lexem);
+begin
+   fLexem := alexem;
+end;
+@ %def LexemObj.Init
+
+\subsection{Sorted Lexeme List implementation}
+<<Sorted Lexeme list implementation>>=
+<<Constructor for [[MSortedLexemList]]>>
+<<Get index of lexeme in a sorted lexeme list>>
+<<Get the object for a lexeme from a lexeme list>>
+@
+
+<<Constructor for [[MSortedLexemList]]>>=
+constructor MSortedLexemList.Init(ALimit: Integer);
+begin
+   inherited InitSorted(ALimit, CompareLexemPtr);
+end;
+@
+
+<<Get index of lexeme in a sorted lexeme list>>=
+function MSortedLexemList.IndexOfLexem(const aLexem: Lexem): Integer;
+var
+   I: Integer;
+   lLexemObj: LexemObj;
+begin
+   IndexOfLexem := -1;
+   if @fCompare = nil then
+   begin
+      ListError(coSortedListError,0);
+      exit;
+   end;
+   lLexemObj.Init(aLexem);
+   if Find(@lLexemObj, I) then
+   begin
+      if I < Count then IndexOfLexem := fIndex^[I];
+   end;
+end;
+@ %def MSortedLexemList.IndexOfLexem
+
+<<Get the object for a lexeme from a lexeme list>>=
+function MSortedLexemList.ObjectOf(const aLexem: Lexem): LexemPtr;
+var
+   I: integer;
+begin
+   ObjectOf := nil;
+   I := IndexOfLexem(aLexem);
+   if I>=0 then ObjectOf := Items^[I];
+end;
+@ %def MSortedLexemList
+
+\subsection{Lexeme and List implementations}
+
+<<Lexeme and list implementations>>=
+<<Construct a new [[MLexemeAndList]]>>
+<<Destruct a [[MLexemeAndList]]>>
+
+<<Construct a new [[MLexemAndListList]]>>
+<<Insert an object at a lexeme in a [[MLexemAndListList]]>>
+@ 
+
+<<Construct a new [[MLexemeAndList]]>>=
+constructor MLexemAndList.Init(const alexem: Lexem);
+begin
+   fLexem := alexem;
+   fList.Init(8);
+end;
+@ %def MLexemAndList.Init
+
+<<Destruct a [[MLexemeAndList]]>>=
+
+destructor MLexemAndList.Done;
+begin
+   fList.Done;
+end;
+@ %def MLexemAndList.Done
+
+<<Construct a new [[MLexemAndListList]]>>=
+constructor MLexemAndListList.Init(ALimit: Integer);
+begin
+   inherited Init(ALimit);
+end;
+@ %def MLexemAndListList.Init
+
+<<Insert an object at a lexeme in a [[MLexemAndListList]]>>=
+procedure MLexemAndListList.InsertAtlexem( aLexem: Lexem; aItem: Pointer);
+var
+   lLexemPtr: MLexemAndListPtr;
+begin
+   lLexemPtr := MLexemAndListPtr(ObjectOf(aLexem));
+   if lLexemPtr = nil then
+   begin
+      lLexemPtr:=new(MLexemAndListPtr,Init(aLexem));
+      Insert(lLexemPtr);
+   end;
+   lLexemPtr^.fList.Insert(aItem);
+end;
+@ %def MLexemAndListList.InsertAtlexem
+
+\subsection{Collecting Terms}
+
+<<Collecting terms implementation>>=
+<<Skip loci in a predicate>>
+<<Compare term lists>>
+<<Compare attributes>>
+<<Compare type collections>>
+<<Compare types>>
+<<Compare formulas>>
+<<Size of a term list>>
+<<Size of type>>
+<<Size of a term>>
+
+@
+
+<<Skip loci in a predicate>>=
+procedure SkipLocPred(var aFrm: FrmPtr);
+var
+   lFrm: FrmPtr;
+begin
+   repeat
+      while aFrm^.FrmSort=ikFrmPrivPred do
+         if LocPredFrmPtr(aFrm)^.PredExp^.FrmSort = ikError then exit
+         else aFrm:=LocPredFrmPtr(aFrm)^.PredExp;
+      if (aFrm^.FrmSort=ikFrmNeg)
+         and (NegFrmPtr(aFrm)^.NegArg^.FrmSort = ikFrmPrivPred) then
+      begin
+         lFrm:=LocPredFrmPtr(NegFrmPtr(aFrm)^.NegArg)^.PredExp;
+         if lFrm^.FrmSort = ikError then exit;
+         while lFrm^.FrmSort=ikFrmPrivPred do
+            lFrm:=LocPredFrmPtr(lFrm)^.PredExp;
+         if lFrm^.FrmSort = ikError then exit;
+         if lFrm^.FrmSort = ikFrmNeg then
+            aFrm:=NegFrmPtr(lFrm)^.NegArg;
+      end
+   until aFrm^.FrmSort<>ikFrmPrivPred;
+end;
+@ %def SkipLocPred
+
+<<Compare term lists>>=
+function CompareTrms(fTrm1,fTrm2:TrmPtr):integer; forward;
+
+function CompareTrmLists(fTrmList1,fTrmList2: TrmList): integer;
+var
+   lInt: integer;
+   {! uwaga zaklada sie ze lsity sa rowne !}
+   {! note, it is assumed that the numbers are equal!}
+begin
+   CompareTrmLists:=0;
+   while fTrmList1 <> nil do
+   begin lInt:=CompareTrms(fTrmList1^.XTrmPtr,fTrmList2^.XTrmPtr);
+      if lInt <> 0 then begin CompareTrmLists:=lInt; exit end;
+      fTrmList1:=fTrmList1^.NextTrm;
+      fTrmList2:=fTrmList2^.NextTrm;
+   end;
+end;
+@ %def CompareTrmLists
+
+<<Compare attributes>>=
+function CompareAttr(aAttr1, aAttr2: AttrPtr): Integer;
+var
+   lInt,lAttrNr1,lAttrNr2: integer;
+   lArgs1,lArgs2: TrmList;
+begin
+   aAttr1^.AdjustAttr(lAttrNr1,lArgs1);
+   aAttr2^.AdjustAttr(lAttrNr2,lArgs2);
+   lInt:=CompareInt(lAttrNr1,lAttrNr2);
+   if lInt <> 0 then begin CompareAttr:=lInt; exit end;
+   lInt:=CompareInt(ord(aAttr1^.fNeg),ord(aAttr2^.fNeg));
+   if lInt <> 0 then begin CompareAttr:=lInt; exit end;
+   CompareAttr:=CompareTrmLists(lArgs1,lArgs2);
+end;
+@ %def CompareAttr
+
+<<Compare clusters>>=
+function CompareClusters(aClu1,aClu2: AttrCollectionPtr): integer;
+var
+   i,lInt: integer;
+begin
+   lInt:=CompareInt(aClu1^.Count,aClu2^.Count);
+   if lInt <> 0 then begin CompareClusters:=lInt; exit end;
+   for i:=0 to aClu1^.Count-1 do
+   begin
+      lInt:=CompareAttr(AttrPtr(AttrCollectionPtr(aClu1)^.Items^[i]),AttrPtr(AttrCollectionPtr(aClu2)^.Items^[i]));
+      if lInt <> 0 then begin CompareClusters:=lInt; exit end;
+   end;
+   CompareClusters:=0;
+end;
+@ %def CompareClusters
+
+<<Compare type collections>>=
+function CompareTyps(fTyp1,fTyp2:TypPtr):integer; forward;
+
+function CompareTypColls(const fColl1,fColl2: MCollection): integer;
+ { kolekcje typow } {type collections}
+var
+   lint,k: integer;
+begin
+   CompareTypColls := 0;
+   lInt := CompareInt(fColl1.Count,fColl2.Count);
+   if lInt <> 0 then begin CompareTypColls := lInt; exit end;
+   for k := 0 to fColl1.Count-1 do
+   begin
+      lInt := CompareTyps(fColl1.Items^[k],fColl2.Items^[k]);
+      if lInt <> 0 then begin CompareTypColls := lInt; exit end;
+   end;
+end;
+@ %def CompareTypColls
+
+<<Compare types>>=
+function CompareTyps(fTyp1,fTyp2: TypPtr): integer;
+var
+   lInt: integer;
+begin
+   with fTyp1^ do
+   begin
+      lInt := CompareInt(ord(TypSort),ord(fTyp2^.TypSort));
+      if lInt <> 0 then begin CompareTyps := lInt; exit end;
+      lInt := CompareInt(ModNr,fTyp2^.ModNr);
+      if lInt <> 0 then begin CompareTyps := lInt; exit end;
+      lInt := CompareClusters(LowerCluster,fTyp2^.LowerCluster);
+      if lInt <> 0 then begin CompareTyps := lInt; exit end;
+      CompareTyps := CompareTrmLists(ModArgs,fTyp2^.ModArgs);
+   end;
+end;
+@ %def CompareTyps
+
+<<Compare formulas>>=
+function CompareFrms(fFrm1,fFrm2: FrmPtr): integer;
+var
+   lInt,k: integer;
+begin
+   CompareFrms := 0;
+   SkipLocPred(fFrm1);
+   // SkipLocPred(fFrm1); To be checked later whether SkipLocPred(fFrm2) is not needed here!!!
+   lInt := CompareInt(ord(fFrm1^.FrmSort),ord(fFrm2^.FrmSort));
+   if lInt <> 0 then begin CompareFrms := lInt; exit end;
+   case fFrm1^.FrmSort of
+      ikFrmVerum,ikFrmThesis: ;
+      ikFrmNeg: CompareFrms := CompareFrms(NegFrmPtr(fFrm1)^.NegArg,NegFrmPtr(fFrm2)^.NegArg);
+      ikFrmQual:
+         with QualFrmPtr(fFrm1)^ do
+      begin
+         lInt := CompareTrms(QualTrm,QualFrmPtr(fFrm2)^.QualTrm);
+         if lInt <> 0 then begin CompareFrms := lInt; exit end;
+         CompareFrms := CompareTyps(QualTyp,QualFrmPtr(fFrm2)^.QualTyp);
+      end;
+      ikFrmConj:
+         with ConjFrmPtr(fFrm1)^ do
+      begin
+         lInt := CompareInt(Conjuncts.Count,ConjFrmPtr(fFrm2)^.Conjuncts.Count);
+         if lInt <> 0 then begin CompareFrms := lInt; exit end;
+         for k := 0 to Conjuncts.Count-1 do
+         begin
+            lInt := CompareFrms(Conjuncts.Items^[k],ConjFrmPtr(fFrm2)^.Conjuncts.Items^[k]);
+            if lInt <> 0 then begin CompareFrms := lInt; exit end;
+         end;
+      end;
+      ikFrmSchPred,ikFrmAttr,ikFrmPrivPred,ikFrmPred:
+         with PredFrmPtr(fFrm1)^ do
+      begin
+         lInt := CompareInt(PredNr,PredFrmPtr(fFrm2)^.PredNr);
+         if lInt <> 0 then begin CompareFrms := lInt; exit end;
+         CompareFrms := CompareTrmLists(PredArgs,PredFrmPtr(fFrm2)^.PredArgs);
+      end;
+      ikFrmUniv:
+         with UnivFrmPtr(fFrm1)^ do
+      begin
+         lInt := CompareTyps(Quantified,UnivFrmPtr(fFrm2)^.Quantified);
+         if lInt <> 0 then begin CompareFrms := lInt; exit end;
+         CompareFrms := CompareFrms(Scope,UnivFrmPtr(fFrm2)^.Scope);
+      end;
+      ikError: ;
+   else RunTimeError(2049);
+   end;
+end;
+@ %def CompareFrms
+
+<<Size of a term list>>=
+function SizeOfTrm(fTrm: TrmPtr):integer; FORWARD;
+
+function SizeOfTrmList(fTrmList: TrmList): integer;
+var
+   s: integer;
+begin
+   s := 0;
+   while fTrmList <> nil do
+      with fTrmList^ do
+   begin
+      inc(s,SizeOfTrm(XTrmPtr));
+      fTrmList := NextTrm;
+   end;
+   SizeOfTrmList := s;
+end;
+@ %def SizeOfTrmList
+
+<<Size of type>>=
+function SizeOfTyp(fTyp:TypPtr):integer;
+begin
+   with fTyp^ do
+      case TypSort of
+         ikTypMode,ikTypStruct: SizeOfTyp := SizeOfTrmList(ModArgs) + 1;
+      else SizeOfTyp := 1;
+      end;
+end;
+@ %def SizeOfTyp
+
+<<Size of a term>>=
+function SizeOfTrm(fTrm: TrmPtr): integer;
+begin
+   case fTrm^.TrmSort of
+      ikTrmSchFunc,ikTrmAggreg,ikTrmFunctor,ikTrmSelector:
+         SizeOfTrm := SizeOfTrmList(FuncTrmPtr(fTrm)^.FuncArgs) + 1;
+      ikTrmPrivFunc:
+         SizeOfTrm := SizeOfTrm(LocFuncTrmPtr(fTrm)^.FuncExp);
+      ikTrmChoice:
+         SizeOfTrm := SizeOfTyp(ChoiceTrmPtr(fTrm)^.ChoiceTyp);
+      ikTrmQua:
+         with QuaTrmPtr(fTrm)^ do
+         SizeOfTrm := SizeOfTrm(TrmProper) + SizeOfTyp(Qua);
+   else SizeOfTrm := 1;
+   end;
+end;
+@ %def SizeOfTrm
+
+<<Compare terms>>=
+function CompareTrms(fTrm1,fTrm2: TrmPtr): integer;
+var
+   lInt: integer;
+begin
+   CompareTrms := 0;
+   lInt := CompareInt(SizeOfTrm(fTrm1),SizeOfTrm(fTrm2));
+   if lInt <> 0 then begin CompareTrms := lInt; exit end;
+   while fTrm1^.TrmSort=ikTrmPrivFunc do
+      if LocFuncTrmPtr(fTrm1)^.FuncExp^.TrmSort=ikError then break
+      else fTrm1 := LocFuncTrmPtr(fTrm1)^.FuncExp;
+   while fTrm2^.TrmSort=ikTrmPrivFunc do
+      if LocFuncTrmPtr(fTrm2)^.FuncExp^.TrmSort=ikError then break
+      else fTrm2 := LocFuncTrmPtr(fTrm2)^.FuncExp;
+   with fTrm1^ do
+   begin
+      lInt := CompareInt(ord(TrmSort),ord(fTrm2^.TrmSort));
+      if lInt <> 0 then begin CompareTrms := lInt; exit end;
+      case TrmSort of
+         ikTrmLocus,ikTrmBound,ikTrmConstant,ikTrmInfConst,ikTrmFreeVar,ikTrmLambdaVar,ikTrmNumeral,ikTrmEqConst:
+            with VarTrmPtr(fTrm1)^ do
+         begin
+            CompareTrms := CompareInt(VarNr,VarTrmPtr(fTrm2)^.VarNr);
+         end;
+         ikTrmSchFunc,ikTrmAggreg,ikTrmPrivFunc,ikTrmFunctor,ikTrmSelector:
+            with FuncTrmPtr(fTrm1)^ do
+         begin
+            lInt := CompareInt(FuncNr,FuncTrmPtr(fTrm2)^.FuncNr);
+            if lInt <> 0 then begin CompareTrms := lInt; exit end;
+            CompareTrms := CompareTrmLists(FuncArgs,FuncTrmPtr(fTrm2)^.FuncArgs);
+         end;
+         ikTrmFraenkel:
+            with FraenkelTrmPtr(fTrm1)^  do
+         begin
+            lInt := CompareTrms(LambdaScope,FraenkelTrmPtr(fTrm2)^.LambdaScope);
+            if lInt <> 0 then begin CompareTrms := lInt; exit end;
+            lInt := CompareFrms(Compr,FraenkelTrmPtr(fTrm2)^.Compr);
+            if lInt <> 0 then begin CompareTrms := lInt; exit end;
+            CompareTrms := CompareTypColls(LambdaArgs,FraenkelTrmPtr(fTrm2)^.LambdaArgs);
+         end;
+         ikTrmChoice:
+            CompareTrms := CompareTyps(ChoiceTrmPtr(fTrm1)^.ChoiceTyp,
+                                       ChoiceTrmPtr(fTrm2)^.ChoiceTyp);
+         ikTrmQua:
+            with QuaTrmPtr(fTrm1)^ do
+         begin
+            lInt := CompareTrms(TrmProper,QuaTrmPtr(fTrm2)^.TrmProper);
+            if lInt <> 0 then begin CompareTrms := lInt; exit end;
+            CompareTrms := CompareTyps(Qua,QuaTrmPtr(fTrm2)^.Qua);
+         end;
+         ikTrmIt: ;
+      else
+      begin
+         {$IFDEF MDEBUG}
+         writeln(InfoFile,'CompareTrms:TrmSort=',TrmSort,'|');
+         {$ENDIF}
+         RunTimeError(2341);
+      end;
+      end;
+   end;
+end;
+@ %def CompareTrms
+
+\subsection{Term-Type Collections}
+
+We track the types of terms in a [[TTCollection]], which is an key-value
+dictionary.
+
+<<Type--term dictionary>>=
+<<Get key of an item in a TT Collection>>
+<<Compare keys in a TT Collection>>
+<<Construct a TT Pair object>>
+<<Destruct a TT Pair object>>
+<<Mark terms in a TT Collection>>
+<<Round up type for a term with a given type>>
+<<Insert a term into a TT collection>>
+<<Remove terms from a TT Collection>>
+
+@ 
+
+<<Get key of an item in a TT Collection>>=
+function TTCollection.KeyOf(Item:pointer): pointer;
+begin KeyOf := TTPairPtr(Item)^.nTrm;
+end;
+@ %def TTCollection.KeyOf
+
+<<Compare keys in a TT Collection>>=
+function TTCollection.Compare(Key1,Key2:pointer): integer;
+begin Compare := CompareTrms(TrmPtr(Key1),TrmPtr(Key2));
+end;
+@ %def TTCollection.Compare
+
+<<Construct a TT Pair object>>=
+constructor TTPairObj.Init(fTrm: TrmPtr);
+var
+   lClusterPtr: AttrCollectionPtr;
+begin
+   nTermScope := gTermScope;
+   nTrm := CopyTerm(fTrm);
+   nTyp := CopyTrmType(fTrm);
+end;
+@ %def TTPairObj.Init
+
+<<Destruct a TT Pair object>>=
+destructor TTPairObj.Done;
+begin
+   DisposeTrm(nTrm);
+   dispose(nTyp, Done);
+end;
+@ %def TTPairObj.Done
+
+<<Mark terms in a TT Collection>>=
+procedure MarkTermsInTTColl;
+begin
+   inc(gTermScope);
+end;
+@ %def MarkTermsInTTColl
+
+<<Round up type for a term with a given type>>=
+function RoundUpTrmTypeWithType(lTyp: TypPtr; fTrm: TrmPtr): TypPtr;
+var
+   i,lLeft,lRight: integer;
+   lClusterPtr: AttrCollectionPtr;
+   lFunctorCluster: FClusterPtr;
+   lKey: FClusterObj;
+   lIntSet: IntSet;
+label Inconsistent{,1};
+begin
+   if fTrm^.TrmSort in [ikTrmFunctor,ikTrmSelector,ikTrmAggreg] then
+   begin
+      lClusterPtr := CopyCluster(lTyp^.UpperCluster);
+      lKey.nClusterTerm := fTrm;
+      if FunctorCluster.FindInterval( @lKey, lLeft, lRight) then
+      begin
+         i := lLeft;
+         lIntSet.Init(0);
+         while i <= lRight do
+         begin
+            if not lIntSet.IsInSet(i) then
+            begin lFunctorCluster := FunctorCluster.AtIndex(i);
+            if RoundUpWith(lFunctorCluster,fTrm,lTyp,lClusterPtr) then
+            begin
+               lClusterPtr^.RoundUpWith(lTyp);
+               dispose(lTyp^.UpperCluster,Done);
+               lTyp^.UpperCluster := lClusterPtr;
+               if not lClusterPtr^.fConsistent then
+               begin
+                  lIntSet.Done;
+                  goto Inconsistent;
+               end;
+               lClusterPtr := CopyCluster(lTyp^.UpperCluster);
+               lIntSet.Insert(i);
+               if lFunctorCluster^.nClusterType <> nil then
+               begin i := lLeft; continue end;
+            end
+            else if lFunctorCluster^.nClusterType = nil then
+               lIntSet.Insert(i);
+            end;
+            inc(i);
+         end;
+         lIntSet.Done;
+      end;
+      Inconsistent:
+   end;
+   RoundUpTrmTypeWithType := lTyp;
+end;
+@ %def RoundUpTrmTypeWithType
+
+<<Insert a term into a TT collection>>=
+function InsertTermInTTColl(fTrm: TrmPtr): integer;
+var
+   lPlace,i: integer;
+   lTTPairPtr: TTPairPtr;
+   lClusterPtr: AttrCollectionPtr;
+   lTrmList: TrmList;
+   lTrm: TrmPtr;
+begin
+   case fTrm^.TrmSort of
+      ikTrmFunctor,ikTrmSelector,ikTrmAggreg:
+         begin
+            with FuncTrmPtr(fTrm)^ do
+            begin
+               lTrmList := FuncArgs;
+               while lTrmList<>nil do
+               begin
+                  lTrm := lTrmList^.XTrmPtr;
+                  while lTrm^.TrmSort=ikTrmPrivFunc do
+                     if LocFuncTrmPtr(lTrm)^.FuncExp^.TrmSort=ikError then break
+                     else lTrm := LocFuncTrmPtr(lTrm)^.FuncExp;
+                  if lTrm^.TrmSort in [ikTrmFunctor,ikTrmSelector,ikTrmAggreg] then
+                     InsertTermInTTColl(lTrm);
+                  lTrmList := lTrmList^.NextTrm;
+               end;
+            end;
+         end;
+   end;
+   with gTermCollection do
+      if not Search(fTrm,lPlace) then
+      begin
+         lTTPairPtr := new(TTPairPtr,Init(fTrm));
+         AtInsert(lPlace,lTTPairPtr);
+         lTTPairPtr^.nTyp := RoundUpTrmTypeWithType(lTTPairPtr^.nTyp,fTrm);
+         lClusterPtr := CopyCluster(lTTPairPtr^.nTyp^.UpperCluster);
+         lClusterPtr^.RoundUpWith(lTTPairPtr^.nTyp);
+         dispose(lTTPairPtr^.nTyp^.UpperCluster,Done);
+         lTTPairPtr^.nTyp^.UpperCluster := lClusterPtr;
+         for i  :=  0 to Count-1 do
+            if lTTPairPtr = Items^[i] then
+            begin
+               lPlace := i;
+               break
+            end;
+         //    Search(fTrm,lPlace);       // np. nie dziala w przypadku argumentow z fraenkelem
+         { e.g. it does not work with fraenkel arguments }
+         mizassert(2888,lPlace>=0);
+         // moga pojawic sie termy w  wyniku zawolania procedur RoundUp zmieni sie index termu na kolekcji posortowanej
+         { terms may appear as a result of calling the RoundUp 
+           procedures, the index of the term on the sorted collection 
+           will change } 
+      end;
+   result := lPlace;
+end;
+@ %def InsertTermInTTColl
+
+<<Remove terms from a TT Collection>>=
+procedure RemoveTermsFromTTColl;
+var
+   k: integer;
+begin
+   dec(gTermScope);
+   with gTermCollection do
+      for k := 0 to Count-1 do
+         if TTPairPtr(Items^[k])^.nTermScope > gTermScope then
+         begin
+            dispose(TTPairPtr(Items^[k]),Done);
+            Items^[k] := nil
+         end;
+   gTermCollection.Pack;
+end;
+@ %def RemoveTermsFromTTColl
+
+\subsection{}
+
+<<Functor redefinition>>=
+function FuncRedefNr(fNr: integer): integer;
+begin
+   with ConstrPtr( Constr[ coFunctor].Items^[ fNr])^ do
+      if fWhichConstrNr <> 0 then
+         FuncRedefNr :=  fWhichConstrNr
+      else FuncRedefNr :=  fNr;
+end;
+@ %def FuncRedefNr
+
+A simple function which places [[ikTrmFunctors]] before all other
+[[ikTerm]] instances.
+
+<<Compare functor terms>>=
+// this is now very simple, ikTrmFunctor > any other ikTrm,
+// all other ikTrm equal, and two ikTrmFunctor by adjusted number
+function CmpFuncTrm(fTrm1,fTrm2: TrmPtr): integer;
+begin
+   if fTrm1^.TrmSort <> ikTrmFunctor then
+   begin
+      if fTrm2^.TrmSort <> ikTrmFunctor then CmpFuncTrm :=  0
+      else CmpFuncTrm :=  -1
+   end
+   else
+   begin
+      if fTrm2^.TrmSort <> ikTrmFunctor then CmpFuncTrm :=  1
+      else
+         CmpFuncTrm  :=  CompareInt( FuncRedefNr( FuncTrmPtr( fTrm1)^.FuncNr),
+                                     FuncRedefNr( FuncTrmPtr( fTrm2)^.FuncNr));
+   end;
+end;
+@ %def CmpFuncTrm
+
+<<Compare functor clusters>>=
+function CmpFuncCluster(fCl1,fCl2: Pointer): integer;
+begin   {?}
+ CmpFuncCluster := CmpFuncTrm(FClusterPtr(fCl1)^.nClusterTerm,
+                              FClusterPtr(fCl2)^.nClusterTerm);
+end;
+@ %def CmpFuncCluster
+
+<<Insert argument>>=
+procedure InsertArgument(fInt: integer);
+begin
+   Mizassert(2537, gTrmList <> nil);
+   if gTrmList^.XTrmPtr^.TrmSort = ikTrmExactly then gExactly[fInt] := true;
+   gSubstTrm[fInt] := gTrmList^.XTrmPtr;
+   gTrmList := gTrmList^.NextTrm;
+end;
+@ %def InsertArgument
+
+\subsection{Formula Classes implementation}
+
+The AST nodes for a formula put in ``Mizar normal form''.
+
+<<Formula classes implementation>>=
+<<Predicate Formula class implementation>>
+<<Local predicate class implementation>>
+<<Qualified formula object implementation>>
+<<Negated formula class implementation>>
+<<Binary formula class implementation>>
+<<Conjunction formula class implementation>>
+<<Universally quantified formula class implementation>>
+<<Uniqueness Formula class implementation>>
+
+@ 
+
+\subsubsection{Predicate formula implementation}
+
+<<Predicate Formula class implementation>>=
+<<Construct a predicate formula object>>
+<<Constructor a predicate formula with a pattern>>
+<<Destruct a predicate formula object>>
+
+@ 
+
+<<Construct a predicate formula object>>=
+constructor PredFrmObj.Init(fPredKind: char;
+                            fPredNr: integer;
+                            fPredArgs: TrmList);
+begin
+   FrmSort := fPredKind;
+   PredNr := fPredNr;
+   PredArgs := fPredArgs;
+end;
+@
+
+<<Constructor a predicate formula with a pattern>>=
+constructor PredFrmObj.InitP(fPredKind: char;
+                             fPredNr: integer;
+                             fPredArgs: TrmList;
+                             fPattNr: integer);
+begin
+   Init(fPredKind, fPredNr, fPredArgs);
+   nPattNr := fPattNr;
+end;
+
+@
+
+<<Destruct a predicate formula object>>=
+destructor PredFrmObj.Done;
+begin
+   DisposeTrmList(PredArgs)
+end;
+@
+
+\subsubsection{Local Predicate Formula implementation}
+
+<<Local predicate class implementation>>=
+<<Construct a local predicate formula object>>
+<<Construct a local predicate formula with a pattern>>
+<<Destruct a local predicate formula object>>
+
+@
+
+<<Construct a local predicate formula object>>=
+constructor LocPredFrmObj.Init(aPredNr: integer;
+                               aPredArgs: TrmList;
+                               aExp: FrmPtr);
+begin
+   FrmSort := ikFrmPrivPred;
+   PredNr := aPredNr;
+   PredArgs := aPredArgs;
+   PredExp := aExp;
+end;
+@
+
+<<Construct a local predicate formula with a pattern>>=
+constructor LocPredFrmObj.InitP(aPredNr: integer;
+                                aPredArgs: TrmList;
+                                aExp: FrmPtr;
+                                aPattNr: integer);
+begin
+   Init(aPredNr, aPredArgs, aExp);
+   nPattNr := aPattNr;
+end;
+@
+
+<<Destruct a local predicate formula object>>=
+destructor LocPredFrmObj.Done;
+begin
+   DisposeTrmList(PredArgs);
+   dispose(PredExp, Done);
+end;
+@
+
+\subsubsection{Qualified formula}
+
+<<Qualified formula object implementation>>=
+<<Construct a qualified formula object>>
+<<Construct a qualified formula with a pattern>>
+<<Destruct a qualified formula>>
+
+@
+
+<<Construct a qualified formula object>>=
+constructor QualFrmObj.Init(fQualTrm: TrmPtr;
+                            fQualTyp: TypPtr);
+begin
+   FrmSort := ikFrmQual;
+   QualTrm := fQualTrm;
+   QualTyp := fQualTyp;
+end;
+@
+
+<<Construct a qualified formula with a pattern>>=
+constructor QualFrmObj.InitP(fQualTrm: TrmPtr;
+                             fQualTyp: TypPtr;
+                             fPattNr: integer);
+begin
+   Init(fQualTrm, fQualTyp);
+   nPattNr := fPattNr;
+end;
+@
+
+<<Destruct a qualified formula>>=
+destructor QualFrmObj.Done;
+begin
+   DisposeTrm(QualTrm);
+   dispose(QualTyp, Done);
+end;
+@
+
+\subsubsection{Negated formula implementation}
+
+<<Negated formula class implementation>>=
+<<Construct a negated formula object>>
+<<Construct a negated formula with a pattern>>
+<<Destruct a negated formula>>
+
+@
+
+<<Construct a negated formula object>>=
+constructor NegFrmObj.Init(fNegArg: FrmPtr);
+begin
+   FrmSort := ikFrmNeg;
+   NegArg := fNegArg
+end;
+@
+
+<<Construct a negated formula with a pattern>>=
+constructor NegFrmObj.InitP(fNegArg: FrmPtr;
+                            fPattNr: integer);
+begin
+   Init(fNegArg);
+   nPattNr := fPattNr;
+end;
+@
+
+<<Destruct a negated formula>>=
+destructor NegFrmObj.Done;
+begin
+   dispose(NegArg, Done);
+end;
+@
+
+\subsubsection{Binary Formula implementation}
+
+<<Binary formula class implementation>>=
+<<Construct a binary formula instance>>
+<<Destruct a binary formula instance>>
+
+@
+
+<<Construct a binary formula instance>>=
+constructor BinFrmObj.Init(aFrmSort: char;
+                           aLeftArg,aRightArg: FrmPtr);
+begin
+   FrmSort := aFrmSort;
+   nLeftArg := aLeftArg;
+   nRightArg := aRightArg;
+end;
+@
+
+<<Destruct a binary formula instance>>=
+destructor BinFrmObj.Done;
+begin
+   dispose(nLeftArg, Done);
+   dispose(nRightArg, Done);
+end;
+@
+
+\subsubsection{Conjunction formula class implementation}
+
+<<Conjunction formula class implementation>>=
+<<Construct a new conjunction formula>>
+<<Construct a new conjunction formula with a pattern>>
+<<Destruct a conjunction formula>>
+
+@
+
+<<Construct a new conjunction formula>>=
+constructor ConjFrmObj.Init(const fConjuncts: MCollection);
+begin
+   FrmSort := ikFrmConj;
+   move(fConjuncts,Conjuncts,SizeOf(MCollection));
+end;
+@
+
+<<Construct a new conjunction formula with a pattern>>=
+constructor ConjFrmObj.InitP(const fConjuncts: MCollection;
+                             fPattNr: integer);
+begin
+   Init(fConjuncts);
+   nPattNr := fPattNr;
+end;
+@
+
+<<Destruct a conjunction formula>>=
+destructor ConjFrmObj.Done;
+begin
+   Conjuncts.Done;
+end;
+@
+
+\subsubsection{Universally quantified formulas}
+
+<<Universally quantified formula class implementation>>=
+<<Construct a universally quantified formula object>>
+<<Construct a universally quantified formula with a pattern>>
+<<Construct a universally quantified formula `instance' object>>
+<<Destruct a universally quantified formula object>>
+
+@
+
+<<Construct a universally quantified formula object>>=
+constructor UnivFrmObj.Init(fSort: char;
+                            fQuantified: TypPtr;
+                            fScope: FrmPtr);
+begin
+   nVarId := 0;
+   FrmSort := fSort;
+   Quantified := fQuantified;
+   Scope := fScope;
+end;
+@
+
+<<Construct a universally quantified formula with a pattern>>=
+constructor UnivFrmObj.InitP(fQuantified: TypPtr;
+                             fScope: FrmPtr;
+                             fPattNr: integer);
+begin
+   Init(ikFrmUniv, fQuantified, fScope);
+   nPattNr := fPattNr;
+end;
+@
+
+<<Construct a universally quantified formula `instance' object>>=
+constructor UnivFrmObj.InitI(aQuantified: TypPtr;
+                             aScope: FrmPtr;
+                             aVarId: integer);
+begin
+   InitP(aQuantified, aScope,0);
+   nVarId := aVarId;
+end;
+@
+
+<<Destruct a universally quantified formula object>>=
+destructor UnivFrmObj.Done;
+begin
+   dispose(Quantified,Done);
+   dispose(Scope,Done);
+end;
+@
+
+\subsubsection{Uniqueness Formula class implementation}
+
+<<Uniqueness Formula class implementation>>=
+<<Construct a uniqueness formula instance>>
+<<Construct a uniqueness formula with a pattern>>
+
+@
+
+<<Construct a uniqueness formula instance>>=
+constructor UniqFrmObj.Init(fKind: char);
+begin
+   FrmSort := fKind;
+end;
+@
+
+<<Construct a uniqueness formula with a pattern>>=
+constructor UniqFrmObj.InitP(fKind: char; fPattNr: integer);
+begin
+   Init(fKind);
+   nPattNr := fPattNr;
+end;
+@ 
