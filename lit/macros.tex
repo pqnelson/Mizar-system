@@ -1,0 +1,308 @@
+%%
+%% macros.tex
+%% 
+%% Made by Alex Nelson <pqnelson@gmail.com>
+%% Login   <alex@lisp>
+%% 
+%% Started on  2025-08-24T08:40:01-0700
+%% Last update 2025-08-24T08:40:01-0700
+%%
+%% \def\topofcontents{\hsize 5.5in
+%%   \vglue 0pt plus 1fil minus 1.5in
+%%   \def\?##1]{\hbox to 1in{\hfil##1.\}}
+%% }
+
+\font\ninett=cmtt9
+\font\eighttt=cmtt8
+\input{epsf}
+\input graphicx.tex %
+\def\Ithink{} % for my unconfirmed suspicions, to make it easier to
+              % edit them out
+\def\hex{\hbox{$^{\scriptscriptstyle\#}$\tt\aftergroup}} % CWEB style
+\def\H#1{\hbox{$^{\scriptscriptstyle\#}$\tt#1}}
+% \def\H#1{} % hexadecimal \def\H#1{\hbox{\rm\char"7D\tt#1}} % hexadecimal constant
+\def\shiftSix{\char`\^}
+\def\pipe{\char`\|}
+\def\botofcontents{\vskip 0pt plus 1fil minus 1.5in}
+%\def\to{\;.\;.\;}
+\def\dotdot{\mathrel{.\,.}} % double dot, used only in math mode
+
+% figures, automatically number the figure
+\newcount\fig
+\fig=0
+\def\figure{\global\advance\fig by 1\begingroup
+\edef\modno{\the\fig}
+}
+\def\endfigure{\endgroup}
+\def\caption#1{\rightline{\vbox{\vskip-3pc\hbox{\eightrm{\eightbf Fig.~\the\fig.}
+#1}}}}
+
+% XML schema
+\def\schema{\obeylines\parindent=0pt\tt\frenchspacing}
+
+% some common attributes
+\def\pos#1{#1attribute col \LB\ xsd:integer \RB,
+
+#1attribute line \LB\ xsd:integer \RB}
+\def\idnr#1{#1attribute idnr \LB\ xsd:integer \RB}
+\def\spelling#1{#1attribute spelling \LB\ text \RB}
+
+
+%\def\to{\ifmmode\dotdot\else$\dotdot$\fi}
+
+\let\oldOne\1
+\newif\ifunindented\unindentedtrue
+\def\interface{\ifunindented\def\1{\oldOne\gdef\1{}}\unindentedfalse\fi}
+\def\endinterface{\unindentedtrue\global\let\1\oldOne\ignorespaces}
+
+\def\section{\mathhexbox278} % TeX's \S
+
+%%
+\def\define#1{\textbf{``#1''}}
+
+%% BEGIN twimac related hacks
+\let\none\relax
+\def\ET{ and~} % conjunction between two section numbers
+\def\ETs{, and~} % conjunction between the last two of several section numbers
+%% END twimac related hacks
+
+\def\makeatletter{\catcode`\@11\relax}
+
+\def\makeatother{\catcode`\@12\relax}
+\makeatletter
+
+%% Hacks to allow \pdfURL{} even when we're not making a PDF
+\expandafter\ifx\csname pdfURL\endcsname\relax%
+  \def\pdfURL#1#2{#2}
+\fi
+
+\def\@href#1#2{\leavevmode\pdfURL{#2}{#1}\catcode`\_8{}}
+
+\def\href{\catcode`\_11\relax\@href}
+
+\def\@doi#1{\leavevmode\pdfURL{{\tt doi:#1}}{https://doi.org/#1}\catcode`\_8\relax}
+
+\def\doi{\catcode`\_11\relax\@doi}
+
+
+%\def\doi#1{\href{https://doi.org/#1}{{\tt doi:#1}}}
+
+% If not on PDF, just print the link
+\expandafter\ifx\csname pdfnote\endcsname\relax%
+  \def\pdfnote#1.{#1}
+\fi
+
+%%%
+%%% A \label and \ref system tailored specifically for node numbers
+%%%
+
+% \label
+\input{labels}
+
+\newwrite\labelsfile
+\immediate\openout\labelsfile={labels.tex}
+
+\def\closelabels{\immediate\closeout\labelsfile%
+  \gdef\closelabels{}}
+
+\def\label#1{%
+  \expandafter\def\csname l@#1\expandafter\endcsname\expandafter{%
+    \modno%
+  }%
+  \immediate\write\labelsfile{%
+    \string\expandafter\def\noexpand\csname l@#1\noexpand\endcsname{\modno}%
+}}
+
+% \ref
+\def\warnundefinedrefhandler#1{\message{Warning: reference #1 on page \folio undefined}{\bf??}}
+\def\undefinedrefhandler#1{{\bf??}}
+\let\defaultundefinedrefhandler\undefinedrefhandler
+
+\def\ref#1{%
+  \expandafter\ifx\csname l@#1\endcsname\relax%
+    \warnundefinedrefhandler{#1}%
+    \undefinedrefhandler{#1}%
+  \else%
+    \expandafter\expandafter\expandafter\relax\csname l@#1\endcsname%
+  \fi}
+
+% \xref{label} will create a linked text to the section with a \label
+% if possible; otherwise, it will return bold "??"
+\def\xref#1{%
+  \edef\tmpref{\ref{#1}}%
+  \expandafter\ifx\csname l@#1\endcsname\relax%
+    \warnundefinedrefhandler{#1}%
+    \undefinedrefhandler{#1}%
+  \else%
+    \expandafter\pdfnote\tmpref.%
+  \fi}
+
+% Redefine \bye to use \@@end, so we can redefine \end
+\let\@@end\end
+
+% `\enddocument` needs to have an \endgroup to fix
+% "semi simple group (level 1) entered at line N (\begingroup)"
+\def\bye{\par\vfill\supereject\closelabels\@@end}
+\makeatother
+
+
+%% Font names from LaTeX
+\def\textbf#1{{\bf #1}}
+\def\texttt#1{{\tt #1}}
+\def\textit#1{{\it #1}}
+\def\emph{\textit}
+
+% When we want to add a label to a chunk without using @* (because we
+% do not want to start a new page, or place it on the table of contents)
+\def\node#1{\textbf{#1\enspace}\ignorespaces}
+
+
+%%%
+%%% LOGOS
+%%%
+\font\eightbf=cmbx8
+\font\ninerm=cmr9
+\let\mc=\ninerm % medium caps
+\font\eightrm=cmr8
+\let\sc=\eightrm % for smallish caps (NOT a caps-and-small-caps font)
+
+\def\CAUTION/{C{\sc AUTION}}
+\def\ASCII/{{\mc ASCII\spacefactor1000}}
+\def\CEE/{{\mc C\spacefactor1000}}% the C programming language
+\def\FORTRAN/{{\mc FORTRAN\spacefactor1000}}% ditto for the older guy
+\def\ALGOL/{{\mc ALGOL\spacefactor1000}}
+\def\COBOL/{{\mc COBOL\spacefactor1000}}
+\def\MIX{{\tt MIX\spacefactor1000}}
+\def\MMIX{{\tt MMIX\spacefactor1000}}
+\def\PASCAL/{{\mc PASCAL\spacefactor1000}}
+\def\UNIX/{{\mc U\kern-.05emNIX\spacefactor1000}}
+\def\TEX/{\TeX}
+\def\CPLUSPLUS/{{\mc C\PP\spacefactor1000}}
+\def\Cee{\CEE/} % for backward compatibility
+\def\Cpp{\CPLUSPLUS/} % for backward compatibility
+\newbox\PPbox % symbol for ++
+\setbox\PPbox=\hbox{\kern.5pt\raise1pt\hbox{\sevenrm+\kern-1pt+}\kern.5pt}
+\def\PP{\copy\PPbox}
+% https://tex.stackexchange.com/q/44528/14751
+% Also of note: https://tex.stackexchange.com/q/132846/14751
+\def\CEESHARP/{{\mc C\#\spacefactor1000}}%{${\mc C}^{\sharp}$\spacefactor1000}
+\def\CSHARP/{\CEESHARP/}
+
+% From tugboat.sty
+\def\acro#1{{\mc #1\spacefactor1000}}
+\def\ASCII/{\acro{ASCII}}%{\mc ASCII\spacefactor1000}}
+\def\PDF/{\acro{PDF}}
+\def\SQL/{{\mc SQL\spacefactor1000}}
+\def\TANGLE/{{\tt TANGLE\spacefactor1000}}
+\def\WEB/{{\tt WEB\spacefactor1000}}
+\def\WEAVE/{{\tt WEAVE\spacefactor1000}}
+\def\XML/{{\mc XML\spacefactor1000}}
+\def\XSLT/{{\mc XSLT\spacefactor1000}}
+
+%%% Miscellaneous macros
+% \boxit from TeXbook exercise 21.3
+% \setbox4=\vbox{\hsize 23pc\noindent\strut blah blah blah\strut}
+% $$ \boxit{\box4} $$
+\def\boxit#1{\leavevmode\hbox to0pt{\vbox to0pt{\hrule\hbox{\vrule\kern3pt%
+  \vbox{\kern3pt#1\kern3pt}\kern3pt\vrule}\hrule}}}
+  
+\def\boxit#1#2#3#4{\leavevmode
+  \hbox{\vrule
+    \vtop to#4{
+      \vbox to#3{\hrule\kern#1%
+        \hbox{\kern#1#2\kern#1}
+      }%
+      %\kern#1
+      \hrule
+    }%
+  \vrule}%
+}
+
+%%%
+%%% Mathematical notation
+%%%
+
+% notation
+\def\abs#1{|#1|} % since |foo| means something else in WEB
+\def\lcm{\mathop{\rm lcm}\nolimits}
+\def\sgn{\mathop{\rm sgn}\nolimits}
+\long\def\frac#1#2{{\begingroup #1\endgroup\over#2}}
+\def\dom{\mathop{\rm dom}\nolimits}
+\def\pto{\rightharpoonup} % partial function
+
+% Logic
+\def\implies{\;\Longrightarrow\;}
+\def\iff{\;\Longleftrightarrow\;}
+
+% Set theory
+\let\propersubset\subset
+\let\subset\subseteq
+
+\def\CC{{\bf C}}
+\def\NN{{\bf N}}
+\def\QQ{{\bf Q}}
+\def\ZZ{{\bf Z}}
+
+\def\magnitude#1{\Vert #1\Vert}
+\def\card#1{|#1|}
+
+%%%
+%%% List macros
+%%%
+\newcount\bugs\bugs=0
+\def\bug{\global\advance\bugs by1%
+\par\hang\textindent{(\the\bugs)}}
+
+\makeatletter
+\let\@item\item
+
+\newcount\enumi\enumi=1
+\def\enumerate{\smallbreak%
+  \begingroup%
+  \advance\leftskip\parindent%
+  \global\enumi=0%
+  \def\item{\global\advance\enumi by1%
+    \par\hang\textindent{(\the\enumi)}}%
+  }
+\def\endenumerate{\endgroup%
+%\advance\leftskip-\parindent%\endgroup
+\smallbreak}
+
+\let\@item\item
+\def\enumerate{\par%\smallbreak%
+  \advance\leftskip\parindent%
+  \global\enumi=0%
+  \def\item{\global\advance\enumi by1%
+    \@item{(\the\enumi)}}%
+  }
+\def\endenumerate{\par\global\let\item\@item%\endgroup%
+\advance\leftskip-\parindent%\endgroup
+\par}%\smallbreak}
+
+
+\makeatother
+
+
+%%%
+%%% Algorithm ``environments''
+
+\def\xskip{\hskip 7pt plus 3pt minus 4pt}
+
+\newdimen\algindent
+\newif\ifitempar \itempartrue % normally true unless briefly set false
+\def\algindentset#1{\setbox0\hbox{{\bf #1.\kern.25em}}\algindent=\wd0\relax}
+\def\algbegin #1 #2{\algindentset{#21}\alg #1 #2} % when steps all have 1 digit
+\def\aalgbegin #1 #2{\algindentset{#211}\alg #1 #2} % when 10 or more steps
+\def\alg#1(#2). {\medbreak % Usage: \algbegin Algorithm A (algname). This...
+  \noindent{\bf#1}({\it#2\/}).\xskip\ignorespaces}
+\def\algstep#1.{\ifitempar\smallskip\noindent\else\itempartrue
+  \hskip-\parindent\fi
+  \hbox to\algindent{\bf\hfil #1.\kern.25em}%
+  \hangindent=\algindent\hangafter=1\ignorespaces}
+
+\def\slug{\hbox{\kern1.5pt\vrule width2.5pt height6pt depth1.5pt\kern1.5pt}}
+
+% indexing hack?
+\def\9#1{}
+
+\endinput

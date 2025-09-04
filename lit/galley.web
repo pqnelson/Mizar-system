@@ -1,0 +1,3538 @@
+\input{labels2}
+\input macros
+\def\title{Galley Proof}
+
+@ The Mizar program is released under the GNU license. So let us place
+this license in one place.
+
+@f unit==program
+@f interface==const
+@f implementation==const
+@f uses==const
+@f object==record
+@f constructor==function
+@f destructor==function
+@f shr==div
+@d othercases == others: {default for cases not listed explicitly}
+@d endcases == @+end {follows the default case in an extended |case| statement}
+@f othercases == else
+@f endcases == end
+@f private == else
+@d disable_io_checking == @{@&$I-@}
+@d enable_io_checking == @{@&$I+@}
+@d without_io_checking(#) == disable_io_checking; #; enable_io_checking
+@d mdebug == @{@&$IFDEF MDEBUG@}
+@d end_mdebug == @{@&$ENDIF@}
+@f mdebug == begin
+@f end_mdebug == end
+
+@
+
+@<GNU License@>=
+{
+   This file is part of the Mizar system.
+   Copyright (c) Association of Mizar Users.
+   License terms: GNU General Public License Version 3 or any later version.
+}
+
+@ Bugs.
+
+\bug The constructor \\{OutWSMizFileObj.OpenFileWithXSL} (\section\xref{OutWSMizFileObj.OpenFileWithXSL})
+expects the \XML/-stylesheet located at \texttt{"file://'+\$MIZFILES+'/wsmiz.xml"},
+but that file is not present in Mizar.
+
+
+@ \node{Writing out to an XML file.}
+
+@p
+procedure Write_WSMizArticle(aWSTextProper:wsTextProperPtr; aFileName:string);
+var lWSMizOutput: OutWSMizFilePtr;
+begin
+   InitScannerNames;
+   lWSMizOutput:=new(OutWSMizFilePtr,OpenFile(aFileName));
+   lWSMizOutput^.nMizarAppearance:=true;
+   lWSMizOutput^.Out_TextProper(aWSTextProper);
+   dispose(lWSMizOutput,Done);
+end;
+
+
+@* Reading WSM files.
+Reading a WSM file amounts to reading an \XML/ file, which means that
+the \\{XMLInStream} class (\section\xref{XMLInStreamObj}) is a natural
+parent class. Recall, the state of the \\{XMLInStream} contains the
+current start tag and a dictionary for the attributes and their values.
+
+@<Publicly declared types in \texttt{wsmarticle.pas}@>=
+   InWSMizFilePtr = ^InWSMizFileObj; @/
+   InWSMizFileObj =
+      object(XMLInStreamObj) @t\1 @> @/
+         nDisplayInformationOnScreen: boolean; @/
+
+         constructor OpenFile(const aFileName:string ); @t\2 @>
+         destructor Done; virtual; @t\2 @>
+
+         function GetAttrValue(const aAttrName:string): string; @t\2 @>
+         function GetAttrPos: Position; @t\2 @>
+
+         function Read_TextProper: wsTextProperPtr; virtual; @t\2 @>
+         function Read_Block: wsBlockPtr; virtual; @t\2 @>
+         function Read_Item: wsItemPtr; virtual; @t\2 @>
+
+         procedure Read_ItemContentsAttr(aItem: wsItemPtr; var aShape: string); virtual; @t\2 @>
+         procedure Read_ItemContents(aItem: wsItemPtr@+;@+ const aShape: string); virtual; @t\2 @>
+
+         function Read_TermList:PList; virtual; @t\2 @>
+         function Read_Adjective:AdjectiveExpressionPtr; virtual; @t\2 @>
+         function Read_AdjectiveList: PList; virtual; @t\2 @>
+         function Read_Type: TypePtr; virtual; @t\2 @>
+         function Read_Variable: VariablePtr; virtual; @t\2 @>
+         function Read_ImplicitlyQualifiedSegment: ImplicitlyQualifiedSegmentPtr; virtual; @t\2 @>
+         function Read_VariableSegment: QualifiedSegmentPtr; virtual; @t\2 @>
+         function Read_PrivatePredicativeFormula:PrivatePredicativeFormulaPtr; virtual; @t\2 @>
+         function Read_Formula:FormulaPtr; virtual; @t\2 @>
+         function Read_SimpleTerm: SimpleTermPtr; virtual; @t\2 @>
+         function Read_PrivateFunctorTerm: PrivateFunctorTermPtr; virtual; @t\2 @>
+         function Read_InternalSelectorTerm: InternalSelectorTermPtr; virtual; @t\2 @>
+         function Read_Term: TermPtr; virtual; @t\2 @>
+
+         function Read_TypeList: PList; virtual; @t\2 @>
+
+         function Read_Locus: LocusPtr; virtual; @t\2 @>
+         function Read_Loci: PList; virtual; @t\2 @>
+
+         function Read_ModePattern: ModePatternPtr; virtual; @t\2 @>
+         function Read_AttributePattern: AttributePatternPtr; virtual; @t\2 @>
+         function Read_FunctorPattern: FunctorPatternPtr; virtual; @t\2 @>
+         function Read_PredicatePattern: PredicatePatternPtr; virtual; @t\2 @>
+         function Read_Pattern: PatternPtr; virtual; @t\2 @>
+
+         function Read_Definiens: DefiniensPtr; virtual; @t\2 @>
+
+         function Read_ReservationSegment: ReservationSegmentPtr; virtual; @t\2 @>
+         function Read_SchemeNameInSchemeHead: SchemePtr; virtual; @t\2 @>
+         function Read_Label: LabelPtr; virtual; @t\2 @>
+         function Read_Proposition: PropositionPtr; virtual; @t\2 @>
+         function Read_CompactStatement: CompactStatementPtr; virtual; @t\2 @>
+         function Read_LocalReference: LocalReferencePtr; virtual; @t\2 @>
+         function Read_References: PList; virtual; @t\2 @>
+         function Read_StraightforwardJustification: StraightforwardJustificationPtr; virtual; @t\2 @>
+         function Read_SchemeJustification: SchemeJustificationPtr; virtual; @t\2 @>
+         function Read_Justification: JustificationPtr; virtual; @t\2 @>
+         function Read_RegularStatement(const aShape: string): RegularStatementPtr; virtual; @t\2\2\2 @>
+      end;
+
+@ \node{Constructor.}
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+constructor InWSMizFileObj.OpenFile(const aFileName:string );
+begin
+   inherited OpenFile(aFileName);
+   nDisplayInformationOnScreen:=false;
+end;
+
+destructor InWSMizFileObj.Done;
+begin
+   inherited Done;
+end;
+
+@ Getting the value for an attribute. Returns |nil| if there is no
+attribute with the given name. (Recall (\section\xref{XMLAttrPtr}),
+an \\{XMLAttr} is just a wrapper around a string \\{nValue}.)
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.GetAttrValue(const aAttrName:string): string;
+var lObj: PObject;
+begin
+   result:='';
+   lObj:=nAttrVals.ObjectOf(aAttrName);
+   if lObj <> nil then
+      result:=XMLAttrPtr(lObj)^.nValue;
+end;
+
+@ We can query for the \emph{position} of the \XML/ attribute.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.GetAttrPos: Position;
+var lLine,lCol: XMLAttrPtr;
+lCode: integer;
+begin
+   result.Line:=1;
+   result.Col:=1;
+   lLine:=XMLAttrPtr(nAttrVals.ObjectOf(XMLAttrName[atLine]));
+   lCol:=XMLAttrPtr(nAttrVals.ObjectOf(XMLAttrName[atCol]));
+   if (lLine <> nil) and (lCol <> nil) then
+   begin
+      Val(lLine^.nValue, result.Line,lCode);
+      Val(lCol^.nValue, result.Col,lCode);
+   end;
+end;
+
+@ The state of the  WSM parser may be described with a handful of
+lookup tables.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+var
+   ElemLookupTable,AttrLookupTable,BlockLookUpTable,ItemLookUpTable,
+   FormulaKindLookupTable,TermKindLookupTable,
+   PatternKindLookupTable,
+   CorrectnessKindLookupTable,PropertyKindLookupTable: MSortedStrList; @#
+
+procedure InitWSLookupTables;
+var e: XMLElemKind;
+a: XMLAttrKind;
+b: BlockKind;
+i: ItemKind;
+f: FormulaSort;
+t: TermSort;
+p: PropertyKind;
+c: CorrectnessKind;
+begin
+   ElemLookupTable.Init( Ord( High( XMLElemKind)) + 1);
+   AttrLookupTable.Init( Ord( High( XMLAttrKind)) + 1);
+   BlockLookupTable.Init( Ord( High( BlockKind)) + 1);
+   ItemLookupTable.Init( Ord( High( ItemKind)) + 1);
+   FormulaKindLookupTable.Init( Ord( High( FormulaSort)) + 1);
+   TermKindLookupTable.Init( Ord( High( TermSort)) + 1);
+   PatternKindLookupTable.Init( Ord(itDefStruct)- Ord(itDefPred) + 1);
+   CorrectnessKindLookupTable.Init(ord( High(CorrectnessKind)) + 1);
+   PropertyKindLookupTable.Init( ord( High(PropertyKind)) + 1);
+
+   for e:= Low( XMLElemKind) to High( XMLElemKind) do
+      ElemLookupTable.Insert( new( MStrPtr, Init( XMLElemName[ e] )));
+   for a:= Low( XMLAttrKind) to High( XMLAttrKind) do
+      AttrLookupTable.Insert( new( MStrPtr, Init( XMLAttrName[ a] )));
+   for b:= Low( BlockKind) to High( BlockKind) do
+      BlockLookupTable.Insert( new( MStrPtr, Init( BlockName[ b] )));
+   for i:= Low( ItemKind) to High( ItemKind) do
+      ItemLookupTable.Insert( new( MStrPtr, Init( ItemName[ i] )));
+   for f:= Low( FormulaSort) to High( FormulaSort) do
+      FormulaKindLookupTable.Insert( new( MStrPtr, Init( FormulaName[ f] )));
+   for t:= Low( TermSort) to High( TermSort) do
+      TermKindLookupTable.Insert( new( MStrPtr, Init( TermName[ t] )));
+   for i:= itDefPred to itDefStruct do
+      PatternKindLookupTable.Insert( new( MStrPtr, Init( DefPatternName[ i] )));
+   for p:= Low( PropertyKind) to High( PropertyKind) do
+      PropertyKindLookupTable.Insert( new( MStrPtr, Init( PropertyName[ p] )));
+   for c:= Low( CorrectnessKind) to High( CorrectnessKind) do
+      CorrectnessKindLookupTable.Insert( new( MStrPtr, Init( CorrectnessName[ c] )));
+end;
+
+@ We also need to free the memory consumed by the lookup tables.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure DisposeWSLookupTables;
+begin
+   ElemLookupTable.Done;
+   AttrLookupTable.Done;
+   BlockLookupTable.Done;
+   ItemLookupTable.Done;
+   FormulaKindLookupTable.Done;
+   TermKindLookupTable.Done;
+   CorrectnessKindLookupTable.Done;
+   PropertyKindLookupTable.Done;
+end;
+
+@ We can recall, from the \XML/ dictionary module
+(\section\xref{XMLDictionary}), the different kinds of \XML/ elements
+as specified by an enumerated constant. This converts the
+``\texttt{nr}'' attribute to the human readable equivalents.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function Str2XMLElemKind( aStr: string): XMLElemKind;
+var lNr:integer;
+begin
+   lNr:= ElemLookupTable.IndexOfStr( aStr);
+   if lNr > -1 then
+      Str2XMLElemKind:= XMLElemKind( lNr)
+   else Str2XMLElemKind:= elUnknown;
+end;
+
+@ Like the previous function, this converts the ``\texttt{nr}''
+attribute for a WSM Mizar attribute \XML/ element into a human
+readable form.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function Str2XMLAttrKind( aStr: string): XMLAttrKind;
+var lNr:integer;
+begin
+   lNr:= AttrLookupTable.IndexOfStr( aStr);
+   if lNr > -1 then
+      Str2XMLAttrKind:= XMLAttrKind( lNr)
+   else Str2XMLAttrKind:= atUnknown;
+end;
+
+@ The ``kinds'' of different syntactic classes were introduced earlier
+in \texttt{wsmarticle.pas}, now we want to translate them into human
+readable form.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function Str2BlockKind( aStr: string): BlockKind;
+var lNr:integer;
+begin
+   lNr:= BlockLookupTable.IndexOfStr( aStr);
+   if lNr > -1 then
+      Str2BlockKind:= BlockKind( lNr)
+   else Str2BlockKind:= blMain;
+end; @#
+
+function Str2ItemKind( aStr: string): ItemKind;
+var lNr:integer;
+begin
+   lNr:= ItemLookupTable.IndexOfStr( aStr);
+   if lNr > -1 then
+      Str2ItemKind:= ItemKind( lNr)
+   else Str2ItemKind:=itIncorrItem;
+end; @#
+
+function Str2PatterenKind( aStr: string): ItemKind;
+var lNr:integer;
+begin
+   lNr:= PatternKindLookupTable.IndexOfStr( aStr);
+   if lNr > -1 then
+      Str2PatterenKind:= ItemKind(Ord(ItDefPred)+lNr)
+   else Str2PatterenKind:=itIncorrItem;
+end; @#
+
+function Str2FormulaKind( aStr: string): FormulaSort;
+var lNr:integer;
+begin
+   lNr:= FormulaKindLookupTable.IndexOfStr( aStr);
+   if lNr > -1 then
+      Str2FormulaKind:= FormulaSort( lNr)
+   else Str2FormulaKind:=wsErrorFormula;
+end; @#
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function Str2TermKind( aStr: string): TermSort;
+var lNr:integer;
+begin
+   lNr:= TermKindLookupTable.IndexOfStr( aStr);
+   if lNr > -1 then
+      Str2TermKind:= TermSort( lNr)
+   else Str2TermKind:=wsErrorTerm;
+end; @#
+
+function Str2PropertyKind( aStr: string): PropertyKind;
+var lNr:integer;
+begin
+   lNr:= PropertyKindLookupTable.IndexOfStr( aStr);
+   if lNr > -1 then
+      Str2PropertyKind:= PropertyKind( lNr)
+end; @#
+
+function Str2CorrectnessKind( aStr: string): CorrectnessKind;
+var lNr:integer;
+begin
+   lNr:= CorrectnessKindLookupTable.IndexOfStr( aStr);
+   if lNr > -1 then
+      Str2CorrectnessKind:= CorrectnessKind( lNr)
+end;
+
+@* $\vdash$ Parsing types.
+Reading a ``term list'' just iteratively invokes \\{Read\_Term}
+(\section\xref{InWSMizFileObj.Read_Term}) until all the children have
+been read.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_TermList:PList;
+begin
+   result :=new(PList,Init(0));
+   while nState <> eEnd do
+      result^.Insert(Read_Term);
+end;
+
+@ An adjective is either ``positive'' (i.e., not negated) or
+``negative'' (i.e., negated). We handle the first case in the ``true''
+branch, and the second case in the ``false'' branch.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Adjective:AdjectiveExpressionPtr;
+var lAttrNr: integer;
+lPos: Position;
+lNoneOcc: Boolean;
+begin
+   if nElName = AdjectiveSortName[wsAdjective] then
+   begin
+      lPos:=GetAttrPos;
+      lAttrNr:=GetIntAttr(XMLAttrName[atNr]);
+      NextElementState;
+      result:=new(AdjectivePtr,Init(lPos,lAttrNr,Read_TermList));
+      NextElementState;
+   end
+   else
+   begin
+      lPos:=GetAttrPos;
+      NextElementState;
+      result:=new(NegatedAdjectivePtr,Init(lPos,Read_Adjective));
+      NextElementState;
+   end;
+end;
+
+@ Reading a list of adjectives just iterates over the children of an element.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_AdjectiveList: PList;
+begin
+   result:=new(Plist,Init(0));
+   NextElementState;
+   while nState <> eEnd do
+      result^.Insert(Read_Adjective);
+   NextElementState;
+end;
+
+@
+There are three valid Mizar types: ``standard'' types, structure
+types, and expandable modes (i.e., a cluster of adjectives stacked
+atop a type). If the \XML/ element fails to match these three, then we
+should produce an ``incorrect type''.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Type: TypePtr;
+var lList: Plist;
+lPos: Position;
+lModeSymbol:integer;
+begin
+   if nElName = TypeName[wsStandardType] then
+   begin
+      lPos:=GetAttrPos;
+      lModeSymbol:=GetIntAttr(XMLAttrName[atNr]);
+      NextElementState;
+      result:=new(StandardTypePtr,Init(lPos,lModeSymbol,Read_TermList));
+      NextElementState;
+   end
+   else if nElName = TypeName[wsStructureType] then
+   begin
+      lPos:=GetAttrPos;
+      lModeSymbol:=GetIntAttr(XMLAttrName[atNr]);
+      NextElementState;
+      result:=new(StructTypePtr,Init(lPos,lModeSymbol,Read_TermList));
+      NextElementState;
+   end
+   else if nElName = TypeName[wsClusteredType] then
+   begin
+      lPos:=GetAttrPos;
+      NextElementState;
+      lList:=Read_AdjectiveList;
+      result:=new(ClusteredTypePtr,Init(lPos,lList,Read_Type));
+      NextElementState;
+   end
+   else
+   begin
+      lPos:=GetAttrPos;
+      NextElementState;
+      result:=new(IncorrectTypePtr,Init(lPos));
+      NextElementState;
+   end
+end;
+
+@* $\vdash$ Parsing formulas.
+Parsing a variable from \XML/ just requires reading the attributes,
+since it is an empty-element.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Variable: VariablePtr;
+var lPos:Position;
+lNr: integer;
+begin
+   lPos:=GetAttrPos;
+   lNr:=GetIntAttr(XMLAttrName[atIdNr]); @/
+   NextElementState; {closes the variable's tag}
+   result:=new(VariablePtr,Init(lPos,lNr)); @/
+   NextElementState; {starts the next tag}
+end;
+
+@ Implicitly qualified variables are just wrappers around a variable.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_ImplicitlyQualifiedSegment: ImplicitlyQualifiedSegmentPtr;
+var lPos: Position;
+begin
+   lPos:=GetAttrPos;
+   NextElementState;
+   result:=new(ImplicitlyQualifiedSegmentPtr,Init(lPos,Read_Variable));
+   NextElementState;
+end;
+
+@ Recall (\section\xref{OutWSMizFileObj.Out_VariableSegment}) that a
+``qualified segment'' is either implicit (i.e., a wrapper around a 
+single variable) or explicit (i.e., an element whose children are
+variables and a type).
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_VariableSegment: QualifiedSegmentPtr;
+var lPos: Position;
+lVar: VariablePtr;
+lList: PList;
+begin
+   if nElName = SegmentKindName[ikImplQualifiedSegm] then
+   begin
+      result:=Read_ImplicitlyQualifiedSegment;
+   end
+   else if nElName = SegmentKindName[ikExplQualifiedSegm] then
+   begin
+      lPos:=GetAttrPos;
+      NextElementState;
+      lList:=new(PList,Init(0)); @/
+      NextElementState; {read the variables}
+      while (nState = eStart) and (nElName = XMLElemName[elVariable]) do
+         lList^.Insert(Read_Variable);
+      NextElementState; {read the type}
+      result:=new(ExplicitlyQualifiedSegmentPtr,Init(lPos,lList,Read_Type));@/
+      NextElementState; {start the next tag}
+   end
+end;
+
+@ Private predicates are empty elements, so we only need to read their
+attributes. 
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_PrivatePredicativeFormula:PrivatePredicativeFormulaPtr;
+var lPos:Position;
+lNr: integer;
+begin
+   lPos:=GetAttrPos;
+   lNr:=GetIntAttr(XMLAttrName[atIdNr]);
+   NextElementState;
+   Result:=new(PrivatePredicativeFormulaPtr,Init(lPos,lNr,Read_TermList));
+   NextElementState;
+end;
+
+@ 
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Formula:FormulaPtr;
+var lPos:Position;
+lNr: integer;
+lList: PList;
+lFrm: FormulaPtr;
+lTrm: TermPtr;
+lSgm: QualifiedSegmentPtr;
+begin
+   case Str2FormulaKind(nElName) of
+      wsNegatedFormula:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            result:=new(NegativeFormulaPtr,Init(lPos,Read_Formula));
+            NextElementState;
+         end; @#
+ @t\4@>     @<Parse \XML/ for formula with binary connective@>; @#
+      wsFlexaryConjunctiveFormula:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lFrm:=Read_Formula;
+            result:=new(FlexaryConjunctiveFormulaPtr,Init(lPos,lFrm,Read_Formula));
+            NextElementState;
+         end;
+      wsFlexaryDisjunctiveFormula:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lFrm:=Read_Formula;
+            result:=new(FlexaryDisjunctiveFormulaPtr,Init(lPos,lFrm,Read_Formula));
+            NextElementState;
+         end; @#
+ @t\4@>     @<Parse \XML/ for predicate-based formula@>; @#
+      wsAttributiveFormula:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lTrm:=Read_Term;
+            Result:=new(AttributiveFormulaPtr,Init(lPos,lTrm,Read_AdjectiveList));
+            NextElementState;
+         end;
+      wsQualifyingFormula:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lTrm:=Read_Term;
+            Result:=new(QualifyingFormulaPtr,Init(lPos,lTrm,Read_Type));
+            NextElementState;
+         end; @#
+      wsUniversalFormula:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lSgm:=Read_VariableSegment;
+            Result:=new(UniversalFormulaPtr,Init(lPos,lSgm,Read_Formula));
+            NextElementState;
+         end;
+      wsExistentialFormula:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lSgm:=Read_VariableSegment;
+            Result:=new(ExistentialFormulaPtr,Init(lPos,lSgm,Read_Formula));
+            NextElementState;
+         end; @#
+      wsContradiction:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            result:=new(ContradictionFormulaPtr,Init(lPos));
+            NextElementState;
+         end;
+      wsThesis:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            result:=new(ThesisFormulaPtr,Init(lPos));
+            NextElementState;
+         end;
+      wsErrorFormula:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            result:=new(IncorrectFormulaPtr,Init(lPos));
+            NextElementState;
+         end;
+   endcases;
+end;
+
+@  For formulas with binary connectives, we read both arguments.
+
+@<Parse \XML/ for formula with binary connective@>=
+      wsConjunctiveFormula:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lFrm:=Read_Formula;
+            result:=new(ConjunctiveFormulaPtr,Init(lPos,lFrm,Read_Formula));
+            NextElementState;
+         end;
+      wsDisjunctiveFormula:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lFrm:=Read_Formula;
+            result:=new(DisjunctiveFormulaPtr,Init(lPos,lFrm,Read_Formula));
+            NextElementState;
+         end;
+      wsConditionalFormula:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lFrm:=Read_Formula;
+            result:=new(ConditionalFormulaPtr,Init(lPos,lFrm,Read_Formula));
+            NextElementState;
+         end;
+      wsBiconditionalFormula:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lFrm:=Read_Formula;
+            result:=new(BiconditionalFormulaPtr,Init(lPos,lFrm,Read_Formula));
+            NextElementState;
+         end
+
+@
+
+@<Parse \XML/ for predicate-based formula@>=
+      wsPredicativeFormula:
+         begin
+            lPos:=GetAttrPos;
+            lNr:=GetIntAttr(XMLAttrName[atNr]);
+            NextElementState;
+            NextElementState; {Arguments}
+            lList:=Read_TermList;
+            NextElementState; {Arguments}
+            NextElementState; {Arguments}
+            Result:=new(PredicativeFormulaPtr,Init(lPos,lNr,lList,Read_TermList));
+            NextElementState;
+            NextElementState;
+         end;
+      wsRightSideOfPredicativeFormula:
+         begin
+            lPos:=GetAttrPos;
+            lNr:=GetIntAttr(XMLAttrName[atNr]);
+            NextElementState;
+            NextElementState; {Arguments}
+            Result:=new(RightSideOfPredicativeFormulaPtr,Init(lPos,lNr,Read_TermList));
+            NextElementState;
+            NextElementState;
+         end;
+      wsMultiPredicativeFormula:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lList:=new(PList,Init(0));
+            while nState <> eEnd do
+               lList^.Insert(Read_Formula);
+            result:=new(MultiPredicativeFormulaPtr,Init(lPos,lList));
+            NextElementState;
+         end;
+      wsPrivatePredicateFormula:
+         begin
+            Result:=Read_PrivatePredicativeFormula;
+         end
+
+@* $\vdash$ Parsing terms.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_SimpleTerm: SimpleTermPtr;
+var lPos:Position;
+lNr: integer;
+begin
+   lPos:=GetAttrPos;
+   lNr:=GetIntAttr(XMLAttrName[atIdNr]);
+   NextElementState;
+   result:=new(SimpleTermPtr,Init(lPos,lNr));
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_PrivateFunctorTerm: PrivateFunctorTermPtr;
+var lPos:Position;
+lNr: integer;
+begin
+   lPos:=GetAttrPos;
+   lNr:=GetIntAttr(XMLAttrName[atIdNr]);
+   NextElementState;
+   result:=new(PrivateFunctorTermPtr,Init(lPos,lNr,Read_TermList));
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_InternalSelectorTerm: InternalSelectorTermPtr;
+var lPos:Position;
+lNr: integer;
+begin
+   lPos:=GetAttrPos;
+   lNr:=GetIntAttr(XMLAttrName[atNr]);
+   NextElementState;
+   result:=new(InternalSelectorTermPtr,Init(lPos,lNr));
+   NextElementState;
+end;
+
+@ 
+
+\label{InWSMizFileObj.Read_Term}
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Term: TermPtr;
+var lPos,lRPos:Position;
+lNr,lRNr: integer;
+lList: PList;
+lTrm: TermPtr;
+begin
+   case Str2TermKind(nElName) of
+      wsPlaceholderTerm:
+         begin
+            lPos:=GetAttrPos;
+            lNr:=GetIntAttr(XMLAttrName[atNr]);
+            NextElementState;
+            result:=new(PlaceholderTermPtr,Init(lPos,lNr));
+            NextElementState;
+         end;
+      wsSimpleTerm:
+         begin
+            result:=Read_SimpleTerm;
+         end;
+      wsNumeralTerm:
+         begin
+            lPos:=GetAttrPos;
+            lNr:=GetIntAttr(XMLAttrName[atNumber]);
+            NextElementState;
+            result:=new(NumeralTermPtr, Init(lPos,lNr));
+            NextElementState;
+         end;
+      wsInfixTerm:
+         begin
+            lPos:=GetAttrPos;
+            lNr:=GetIntAttr(XMLAttrName[atNr]);
+            NextElementState;
+            NextElementState; {Arguments}
+            lList:=Read_TermList;
+            NextElementState; {Arguments}
+            NextElementState; {Arguments}
+            result:=new(InfixTermPtr,Init(lPos,lNr,lList,Read_TermList));
+            NextElementState;
+            NextElementState;
+         end;
+      wsCircumfixTerm:
+         begin
+            lPos:=GetAttrPos;
+            lNr:=GetIntAttr(XMLAttrName[atNr]);
+            NextElementState;
+            NextElementState;
+            lRNr:=GetIntAttr(XMLAttrName[atNr]);
+            lRPos:=GetAttrPos;
+            NextElementState;
+            result:=new(CircumfixTermPtr,Init(lPos,lNr,lRNr,Read_TermList));
+            NextElementState;
+         end;
+      wsPrivateFunctorTerm:
+         begin
+            result:=Read_PrivateFunctorTerm;
+         end;
+      wsAggregateTerm:
+         begin
+            lPos:=GetAttrPos;
+            lNr:=GetIntAttr(XMLAttrName[atNr]);
+            NextElementState;
+            result:=new(AggregateTermPtr,Init(lPos,lNr,Read_TermList));
+            NextElementState;
+         end;
+      wsSelectorTerm:
+         begin
+            lPos:=GetAttrPos;
+            lNr:=GetIntAttr(XMLAttrName[atNr]);
+            NextElementState;
+            result:=new(SelectorTermPtr,Init(lPos,lNr,Read_Term));
+            NextElementState;
+         end;
+      wsInternalSelectorTerm:
+         result:=Read_InternalSelectorTerm;
+      wsForgetfulFunctorTerm:
+         begin
+            lPos:=GetAttrPos;
+            lNr:=GetIntAttr(XMLAttrName[atNr]);
+            NextElementState;
+            result:=new(ForgetfulFunctorTermPtr,Init(lPos,lNr,Read_Term));
+            NextElementState;
+         end;
+      wsInternalForgetfulFunctorTerm:
+         begin
+            lPos:=GetAttrPos;
+            lNr:=GetIntAttr(XMLAttrName[atNr]);
+            NextElementState;
+            result:=new(InternalForgetfulFunctorTermPtr,Init(lPos,lNr));
+            NextElementState;
+         end;
+      wsFraenkelTerm:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lList:=new(PList,Init(0));
+            while (nState = eStart) and
+                     ((nElName = SegmentKindName[ikImplQualifiedSegm]) or
+                         (nElName = SegmentKindName[ikExplQualifiedSegm])) do
+               lList^.Insert(Read_VariableSegment);
+            lTrm:=Read_Term;
+            result:=new(FraenkelTermPtr,Init(lPos,lList,lTrm,Read_Formula));
+            NextElementState;
+         end;
+      wsSimpleFraenkelTerm:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lList:=new(PList,Init(0));
+            while (nState = eStart) and
+                     ((nElName = SegmentKindName[ikImplQualifiedSegm]) or
+                         (nElName = SegmentKindName[ikExplQualifiedSegm])) do
+               lList^.Insert(Read_VariableSegment);
+            lTrm:=Read_Term;
+            result:=new(SimpleFraenkelTermPtr,Init(lPos,lList,lTrm));
+            NextElementState;
+         end;
+      wsQualificationTerm:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            lTrm:=Read_Term;
+            Result:=new(QualifiedTermPtr,Init(lPos,lTrm,Read_Type));
+            NextElementState;
+         end;
+      wsExactlyTerm:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            Result:=new(ExactlyTermPtr,Init(lPos,Read_Term));
+            NextElementState;
+         end;
+      wsGlobalChoiceTerm:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            Result:=new(ChoiceTermPtr,Init(lPos,Read_Type));
+            NextElementState;
+         end;
+      wsItTerm:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            Result:=new(ItTermPtr,Init(lPos));
+            NextElementState;
+         end;
+      wsErrorTerm:
+         begin
+            lPos:=GetAttrPos;
+            NextElementState;
+            Result:=new(IncorrectTermPtr,Init(lPos));
+            NextElementState;
+         end;
+   endcases;
+end;
+
+@* $\vdash$ Parsing text items.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_TypeList: PList;
+begin
+   NextElementState;
+   result :=new(PList,Init(0));
+   while nState <> eEnd do
+      result^.Insert(Read_Type);
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Locus: LocusPtr;
+var lPos:Position;
+lNr: integer;
+begin
+   lPos:=GetAttrPos;
+   lNr:=GetIntAttr(XMLAttrName[atIdNr]);
+   NextElementState;
+   result:=new(LocusPtr,Init(lPos,lNr));
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Loci: PList;
+begin
+   NextElementState;
+   result :=new(PList,Init(0));
+   while nState <> eEnd do
+      result^.Insert(Read_Locus);
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_ModePattern: ModePatternPtr;
+var lPos:Position;
+lNr: integer;
+begin
+   lPos:=GetAttrPos;
+   lNr:=GetIntAttr(XMLAttrName[atNr]);
+   NextElementState;
+   result:=new(ModePatternPtr,Init(lPos,lNr,Read_Loci));
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_AttributePattern: AttributePatternPtr;
+var lPos:Position;
+lNr: integer;
+lArg: LocusPtr;
+begin
+   lPos:=GetAttrPos;
+   lNr:=GetIntAttr(XMLAttrName[atNr]);
+   NextElementState;
+   lArg:=Read_Locus;
+   result:=new(AttributePatternPtr,Init(lPos,lArg,lNr,Read_Loci));
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_FunctorPattern: FunctorPatternPtr;
+var lPos,lRPos:Position;
+lNr,lRNr: integer;
+lArgs: PList;
+begin
+   if nState= eStart then
+      if nElName = FunctorPatternName[InfixFunctor] then
+      begin
+         lPos:=GetAttrPos;
+         lNr:=GetIntAttr(XMLAttrName[atNr]);
+         NextElementState;
+         lArgs:=Read_Loci;
+         result:=new(InfixFunctorPatternPtr,Init(lPos,lArgs,lNr,Read_Loci));
+         NextElementState;
+      end
+      else if nElName = FunctorPatternName[CircumfixFunctor] then
+      begin
+         lPos:=GetAttrPos;
+         lNr:=GetIntAttr(XMLAttrName[atNr]);
+         NextElementState;
+         lRNr:=GetIntAttr(XMLAttrName[atNr]);
+         NextElementState;
+         NextElementState;
+         result:=new(CircumfixFunctorPatternPtr,Init(lPos,lNr,lRNr,Read_Loci));
+         NextElementState;
+      end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_PredicatePattern: PredicatePatternPtr;
+var lPos,lRPos:Position;
+lNr,lRNr: integer;
+lArgs: PList;
+begin
+   lPos:=GetAttrPos;
+   lNr:=GetIntAttr(XMLAttrName[atNr]);
+   NextElementState;
+   lArgs:=Read_Loci;
+   result:=new(PredicatePatternPtr,Init(lPos,lArgs,lNr,Read_Loci));
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Pattern: PatternPtr;
+begin
+   case Str2PatterenKind(nElName) of
+      itDefPred: result:=Read_PredicatePattern;
+      itDefFunc: result:=Read_FunctorPattern;
+      itDefMode: result:=Read_ModePattern;
+      itDefAttr: result:=Read_AttributePattern;
+   othercases
+      if (nElName = FunctorPatternName[InfixFunctor]) or
+            (nElName = FunctorPatternName[CircumfixFunctor])
+      then result:=Read_FunctorPattern
+      else result:=nil;
+   endcases;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Definiens: DefiniensPtr;
+var lPos: Position;
+lKind,lShape: string;
+lLab: LabelPtr;
+lExpr: PObject;
+lExpKind: ExpKind;
+lList: PList;
+lOtherwise: DefExpressionPtr;
+begin
+   result:=nil;
+   if (nState= eStart) and (nElName = XMLElemName[elDefiniens]) then
+   begin
+      lPos:=GetAttrPos;
+      lKind:=GetAttr(XMLAttrName[atKind]);
+      lShape:=GetAttr(XMLAttrName[atShape]);
+      NextElementState;
+      lLab:=Read_Label;
+      if lKind = DefiniensKindName[SimpleDefiniens] then
+      begin
+         lExpKind:=exFormula;
+         if lShape = ExpName[exTerm] then
+            lExpKind:=exTerm;
+         case lExpKind of
+            exTerm: lExpr:=Read_Term;
+            exFormula: lExpr:=Read_Formula;
+         endcases;
+         result:=new(SimpleDefiniensPtr,Init(lPos,lLab,
+                                             new(DefExpressionPtr,Init(lExpKind,lExpr))));
+      end
+      else
+      begin
+         lList:=new(Plist,Init(0));
+         while (nState= eStart) and (nElName = XMLElemName[elPartialDefiniens]) do
+         begin
+            NextElementState;
+            lExpKind:=exFormula;
+            if lShape = ExpName[exTerm] then
+               lExpKind:=exTerm;
+            case lExpKind of
+               exTerm: lExpr:=Read_Term;
+               exFormula: lExpr:=Read_Formula;
+            endcases;
+            lList^.Insert(new(PartDefPtr,Init(new(DefExpressionPtr,Init(lExpKind,lExpr)),Read_Formula)));
+            NextElementState;
+         end;
+         lOtherwise:=nil;
+         if nState <> eEnd then
+         begin
+            lExpKind:=exFormula;
+            if lShape = ExpName[exTerm] then
+               lExpKind:=exTerm;
+            case lExpKind of
+               exTerm: lExpr:=Read_Term;
+               exFormula: lExpr:=Read_Formula;
+            endcases;
+            lOtherwise:=new(DefExpressionPtr,Init(lExpKind,lExpr));
+         end;
+         result:=new(ConditionalDefiniensPtr,Init(lPos,lLab,lList,lOtherwise))
+      end;
+      NextElementState;
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Label: LabelPtr;
+var lLabPos: Position;
+lLabId: Integer;
+begin
+   result:=nil;
+   if (nState= eStart)  and (nElName = XMLElemName[elLabel]) then
+   begin
+      lLabId:=GetIntAttr(XMLAttrName[atIdNr]);
+      lLabPos:=GetAttrPos;
+      NextElementState;
+      NextElementState;
+      result:=new(LabelPtr,Init(lLabId,lLabPos));
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Proposition: PropositionPtr;
+var lPos: Position;
+lLab: LabelPtr;
+begin
+   NextElementState;
+   lLab:=Read_label;
+   result:=new(PropositionPtr,Init(lLab,Read_Formula,lPos));
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_LocalReference: LocalReferencePtr;
+var lPos: Position;
+lNr: integer;
+begin
+   lPos:=GetAttrPos;
+   lNr:=GetIntAttr(XMLAttrName[atIdNr]);
+   NextElementState;
+   NextElementState;
+   result:=new(LocalReferencePtr, Init(lNr,lPos));
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_References: PList;
+var lPos: Position;
+lNr,lFileNr: integer;
+begin
+   result:=new(Plist,Init(0));
+   while nState <> eEnd do
+      if nElName = ReferenceKindName[LocalReference] then
+      begin
+         result^.Insert(Read_LocalReference)
+      end
+      else if nElName = ReferenceKindName[TheoremReference] then
+      begin
+         lPos:=GetAttrPos;
+         lFileNr:=GetIntAttr(XMLAttrName[atNr]);
+         lNr:=GetIntAttr(XMLAttrName[atNumber]);
+         NextElementState;
+         NextElementState;
+         result^.Insert(new(TheoremReferencePtr, Init(lFileNr,lNr,lPos)))
+      end
+      else if nElName = ReferenceKindName[DefinitionReference] then
+      begin
+         lPos:=GetAttrPos;
+         lFileNr:=GetIntAttr(XMLAttrName[atNr]);
+         lNr:=GetIntAttr(XMLAttrName[atNumber]);
+         NextElementState;
+         NextElementState;
+         result^.Insert(new(DefinitionReferencePtr, Init(lFileNr,lNr,lPos)))
+      end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_ReservationSegment: ReservationSegmentPtr;
+var lList: PList;
+begin
+   lList:=new(PList,Init(0));
+   NextElementState; {elVariables}
+   while (nState = eStart) and (nElName = XMLElemName[elVariable]) do
+      lList^.Insert(Read_Variable);
+   NextElementState;
+   result:=new(ReservationSegmentPtr,Init(lList,Read_Type));
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_SchemeNameInSchemeHead: SchemePtr;
+var lNr: Integer;
+lPos: Position;
+begin
+   lPos:=GetAttrPos;
+   lNr:=GetIntAttr(XMLAttrName[atIdNr]);
+   result:=new(SchemePtr,Init(lNr,lPos,nil,nil,nil));
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_CompactStatement: CompactStatementPtr;
+var lProp: PropositionPtr;
+begin
+   lProp:=Read_Proposition;
+   result:=new(CompactStatementPtr,Init(lProp,Read_Justification));
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_StraightforwardJustification: StraightforwardJustificationPtr;
+var lPos,lLinkPos: Position;
+lLinked: boolean;
+begin
+   lPos:=GetAttrPos;
+   NextElementState;
+   lLinked:=false;
+   lLinkPos:=lPos;
+   if nelName = XMLElemName[elLink] then
+   begin
+      lLinked:=true;
+      lLinkPos:=GetAttrPos;
+      NextElementState;
+      NextElementState;
+   end;
+   result:=new(StraightforwardJustificationPtr,Init(lPos,lLinked,lLinkPos));
+   StraightforwardJustificationPtr(result)^.nReferences:=Read_References;
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_SchemeJustification: SchemeJustificationPtr;
+var lInfPos,lPos: Position;
+lNr,lIdNr: integer;
+begin
+   lInfPos:=GetAttrPos;
+   lNr:=GetIntAttr(XMLAttrName[atNr]);
+   lIdNr:=GetIntAttr(XMLAttrName[atIdNr]);
+   lPos.Line:=GetIntAttr( XMLAttrName[atPosLine]);
+   lPos.Col:= GetIntAttr( XMLAttrName[atPosCol]);
+   NextElementState;
+   result:=new(SchemeJustificationPtr,Init(lInfPos,lNr,lIdNr));
+   SchemeJustificationPtr(result)^.nSchemeInfPos:=lPos;
+   SchemeJustificationPtr(result)^.nReferences:=Read_References;
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Justification: JustificationPtr;
+var lPos: Position;
+begin
+   if nState= eStart then
+      if nElName = InferenceName[infStraightforwardJustification] then
+         result:=Read_StraightforwardJustification
+      else if nElName = InferenceName[infSchemeJustification] then
+         result:=Read_SchemeJustification
+      else if nElName = InferenceName[infError] then
+      begin
+         lPos:=GetAttrPos;
+         NextElementState;
+         result:=new(JustificationPtr,Init(infError,lPos));
+         NextElementState;
+      end
+      else if nElName = InferenceName[infSkippedProof] then
+      begin
+         lPos:=GetAttrPos;
+         NextElementState;
+         result:=new(JustificationPtr,Init(infSkippedProof,lPos));
+         NextElementState;
+      end
+      else
+         result:=new(JustificationPtr,Init(infProof,CurPos));
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_RegularStatement(const aShape: string): RegularStatementPtr;
+var lPos: Position;
+lIdNr: integer;
+lTrm: TermPtr;
+lCStm: CompactStatementPtr;
+lLab: LabelPtr;
+begin
+   if aShape = RegularStatementName[stDiffuseStatement] then
+   begin
+      lLab:=Read_Label;
+      result:=new(DiffuseStatementPtr,Init(lLab,stDiffuseStatement));
+   end
+   else if aShape = RegularStatementName[stCompactStatement] then
+   begin
+      result:=Read_CompactStatement;
+   end
+   else if aShape = RegularStatementName[stIterativeEquality] then
+   begin
+      lCStm:=Read_CompactStatement;
+      result:=new(IterativeEqualityPtr,Init(lCStm^.nProp,lCStm^.nJustification,new(PList,Init(0))));
+      while (nState= eStart) and (nElName = XMLElemName[elIterativeStep]) do
+      begin
+         lPos:=GetAttrPos;
+         NextElementState;
+         lTrm:=Read_Term;
+         IterativeEqualityPtr(result)^.nIterSteps^.Insert(new(IterativeStepPtr,Init(lPos,lTrm,Read_Justification)));
+         NextElementState;
+      end;
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure InWSMizFileObj.Read_ItemContentsAttr(aItem: wsItemPtr; var aShape: string);
+begin
+   aShape:='';
+   case aItem^.nItemKind of
+      itIncorrItem:;
+      itDefinition, itSchemeBlock, itSchemeHead, itTheorem, itAxiom,
+      itReservation:;
+      itSection:;
+      itConclusion,
+      itRegularStatement:
+         aShape:=GetAttr(XMLAttrName[atShape]);
+      itChoice, itReconsider,
+      itPrivFuncDefinition, itPrivPredDefinition, itConstantDefinition,
+      itGeneralization, itLociDeclaration,itExistentialAssumption, itExemplification,
+      itPerCases, itCaseBlock:;
+      itCaseHead, itSupposeHead,
+      itAssumption:;
+      itCorrCond:
+         aItem^.nContent:=new(CorrectnessConditionPtr,
+                              Init(CurPos,Str2CorrectnessKind(GetAttr(XMLAttrName[atCondition])),nil));
+      itCorrectness:
+         aItem^.nContent:=new(CorrectnessConditionsPtr,Init(CurPos,[],nil));
+      itProperty:
+         aShape:=GetAttr(XMLAttrName[atProperty]);
+      itDefFunc:
+         aShape:=GetAttr(XMLAttrName[atShape]);
+      itDefPred, itDefMode, itDefAttr,
+      itDefStruct,
+      itPredSynonym, itPredAntonym, itFuncNotation, itModeNotation,
+      itAttrSynonym, itAttrAntonym,
+      itCluster,
+      itIdentify, itReduction:;
+      itPropertyRegistration:
+         aShape:=GetAttr(XMLAttrName[atProperty]);
+      itPragma:
+         aItem^.nContent:=new(PragmaPtr,Init(XMLToStr(GetAttr(XMLAttrName[atSpelling]))));
+   endcases;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure InWSMizFileObj.Read_ItemContents(aItem: wsItemPtr; const aShape: string);
+var lList,lCons,lConds,lVars,lFields,lTyps,lSels: PList;
+lType: TypePtr;
+lNr: Integer;
+lVar: VariablePtr;
+lLocus: LocusPtr;
+lTrm: TermPtr;
+lPos,lFieldSgmPos: Position;
+lRedefinition: boolean;
+lPattern: PatternPtr;
+lDef: HowToDefine;
+lPropertySort: PropertyKind;
+begin
+   lPos:=CurPos;
+   case aItem^.nItemKind of
+      itIncorrItem:;
+      itDefinition:;
+      itSchemeBlock:;
+      itSchemeHead:
+         begin
+            aItem^.nContent:=Read_SchemeNameInSchemeHead;
+            NextElementState;
+            NextElementState;
+            NextElementState;   {elSchematicVariables}
+            lList:=new(PList,Init(0));
+            while (nState = eStart) and
+                     ((nElName = SchemeSegmentName[PredicateSegment]) or
+                         (nElName = SchemeSegmentName[FunctorSegment])) do
+               if nElName = SchemeSegmentName[PredicateSegment] then
+               begin
+                  lPos:=GetAttrPos;
+                  NextElementState;
+                  lVars:=new(PList,Init(0));
+                  NextElementState; {elVariables}
+                  while (nState = eStart) and (nElName = XMLElemName[elVariable]) do
+                     lVars^.Insert(Read_Variable);
+                  NextElementState;
+                  lList^.Insert(new(PredicateSegmentPtr,Init(lPos,PredicateSegment,lVars,Read_TypeList)));
+                  NextElementState;
+               end
+               else
+               begin
+                  lPos:=GetAttrPos;
+                  NextElementState;
+                  lVars:=new(PList,Init(0));
+                  NextElementState; {elVariables}
+                  while (nState = eStart) and (nElName = XMLElemName[elVariable]) do
+                     lVars^.Insert(Read_Variable);
+                  NextElementState;
+                  lTyps:=Read_TypeList;
+                  NextElementState;
+                  lList^.Insert(new(FunctorSegmentPtr,Init(lPos,lVars,lTyps,Read_Type)));
+                  NextElementState;
+                  NextElementState;
+               end;
+            SchemePtr(aItem^.nContent)^.nSchemeParams:=lList;
+            NextElementState; {elSchematicVariables}
+            SchemePtr(aItem^.nContent)^.nSchemeConclusion:=Read_Formula;
+            lConds:=new(PList,Init(0));
+            if (nState = eStart) and (nElName = XMLElemName[elProvisionalFormulas]) then
+            begin
+               NextElementState;
+               while (nState = eStart) and (nElName = XMLElemName[elProposition]) do
+                  lConds^.Insert(Read_Proposition);
+               NextElementState;
+            end;
+            SchemePtr(aItem^.nContent)^.nSchemePremises:=lConds;
+         end;
+      itTheorem:
+         aItem^.nContent:=Read_CompactStatement;
+      itAxiom:
+         begin
+         end;
+      itReservation:
+         aItem^.nContent:=Read_ReservationSegment;
+      itSection:;
+      itChoice:
+         begin
+            lList:=new(PList,Init(0));
+            while (nState = eStart) and
+                     ((nElName = SegmentKindName[ikImplQualifiedSegm]) or
+                         (nElName = SegmentKindName[ikExplQualifiedSegm])) do
+               lList^.Insert(Read_VariableSegment);
+            NextElementState;
+            lConds:=nil;
+            if nElName = XMLElemName[elProposition] then
+            begin
+               lConds:=new(PList,Init(0));
+               while (nState = eStart) and (nElName = XMLElemName[elProposition]) do
+                  lConds^.Insert(Read_Proposition);
+            end;
+            NextElementState;
+            aItem^.nContent:=new(ChoiceStatementPtr,Init(lList,lConds,
+                                                         SimpleJustificationPtr(Read_Justification)));
+         end;
+      itReconsider:
+         begin
+            lList:=new(PList,Init(0));
+            while (nState = eStart) and
+                     ((nElName = XMLElemName[elEquality]) or (nElName = XMLElemName[elVariable])) do
+               if nElName = XMLElemName[elVariable] then
+                  lList^.Insert(new(TypeChangePtr,Init(VariableIdentifier,Read_Variable,nil)))
+               else
+               begin
+                  NextElementState;
+                  lVar:=Read_Variable;
+                  lList^.Insert(new(TypeChangePtr,Init(Equating,lVar,Read_Term)));
+                  NextElementState;
+               end;
+            lType:=Read_Type;
+            aItem^.nContent:=new(TypeChangingStatementPtr,
+                                 Init(lList,lType,SimpleJustificationPtr(Read_Justification)));
+         end;
+      itPrivFuncDefinition:
+         begin
+            lVar:=Read_Variable;
+            lList:=Read_TypeList;
+            aItem^.nContent:=new(PrivateFunctorDefinitionPtr,Init(lVar,lList,Read_Term));
+         end;
+      itPrivPredDefinition:
+         begin
+            lVar:=Read_Variable;
+            lList:=Read_TypeList;
+            aItem^.nContent:=new(PrivatePredicateDefinitionPtr,Init(lVar,lList,Read_Formula));
+         end;
+      itConstantDefinition:
+         begin
+            lVar:=Read_Variable;
+            aItem^.nContent:=new(ConstantDefinitionPtr,Init(lVar,Read_Term));
+         end;
+      itLociDeclaration,
+      itGeneralization:
+         aItem^.nContent:=Read_VariableSegment;
+      itPerCases:
+         aItem^.nContent:=Read_Justification;
+      itCaseBlock: ;
+      itCorrCond:
+         begin
+            CorrectnessConditionPtr(aItem^.nContent)^.nJustification:=Read_Justification;
+         end;
+      itCorrectness:
+         begin
+            NextElementState;
+            while (nState = eStart) and (nElName = ItemName[itCorrectness]) do
+            begin
+               NextElementState;
+               include(CorrectnessConditionsPtr(aItem^.nContent)^.nConditions,
+                       Str2CorrectnessKind(GetAttr(XMLAttrName[atCondition])));
+               NextElementState;
+            end;
+            NextElementState;
+            CorrectnessConditionPtr(aItem^.nContent)^.nJustification:=Read_Justification;
+         end;
+      itProperty:
+         aItem^.nContent:=new(PropertyPtr,Init(lPos,Str2PropertyKind(aShape),Read_Justification));
+      itConclusion,
+      itRegularStatement:
+         aItem^.nContent:=Read_RegularStatement(aShape);
+      itCaseHead,itSupposeHead,
+      itAssumption:
+         if nState= eStart then
+            if nElName = AssumptionKindName[SingleAssumption] then
+            begin
+               lPos:=GetAttrPos;
+               NextElementState;
+               aItem^.nContent:=new(SingleAssumptionPtr,Init(lPos,Read_Proposition));
+               NextElementState;
+            end
+            else if nElName = AssumptionKindName[CollectiveAssumption] then
+            begin
+               lPos:=GetAttrPos;
+               NextElementState;
+               aItem^.nContent:=new(CollectiveAssumptionPtr,Init(lPos,new(PList,Init(0))));
+               NextElementState;
+               while (nState = eStart) and (nElName = XMLElemName[elProposition]) do
+                  CollectiveAssumptionPtr(aItem^.nContent)^.nConditions^.Insert(Read_Proposition);
+               NextElementState;
+               NextElementState;
+            end;
+      itExistentialAssumption:
+         begin
+            aItem^.nContent:=new(ExistentialAssumptionPtr,Init(lPos,new(PList,Init(0)),new(PList,Init(0))));
+            while (nState = eStart) and
+                     ((nElName = SegmentKindName[ikImplQualifiedSegm]) or
+                         (nElName = SegmentKindName[ikExplQualifiedSegm])) do
+               ExistentialAssumptionPtr(aItem^.nContent)^.nQVars^.Insert(Read_VariableSegment);
+            NextElementState;
+            while (nState = eStart) and (nElName = XMLElemName[elProposition]) do
+               ExistentialAssumptionPtr(aItem^.nContent)^.nConditions^.Insert(Read_Proposition);
+            NextElementState;
+         end;
+      itExemplification:
+         begin
+            lVar:=nil;
+            if (nState = eStart) and (nElName = XMLElemName[elVariable]) then
+               lVar:=Read_Variable;
+            lTrm:=nil;
+            if nState <> eEnd then
+               lTrm:=Read_Term;
+            aItem^.nContent:=new(ExamplePtr,Init(lVar,lTrm));
+         end;
+      itDefPred:
+         begin
+            lRedefinition:=false;
+            if (nState= eStart) and (nElName = XMLElemName[elRedefine]) then
+            begin
+               NextElementState;
+               NextElementState;
+               lRedefinition:=true;
+            end;
+            lPattern:=Read_PredicatePattern;
+            aItem^.nContent:=new(PredicateDefinitionPtr,
+                                 Init(lPos,lRedefinition,PredicatePatternPtr(lPattern),
+                                      Read_Definiens));
+         end;
+      itDefFunc:
+         begin
+            lRedefinition:=false;
+            if (nState= eStart) and (nElName = XMLElemName[elRedefine]) then
+            begin
+               NextElementState;
+               NextElementState;
+               lRedefinition:=true;
+            end;
+            lPattern:=Read_FunctorPattern;
+            lType:=nil;
+            if (nState= eStart) and (nElName = XMLElemName[elTypeSpecification]) then
+            begin
+               NextElementState;
+               lType:=Read_Type;
+               NextElementState;
+            end;
+            if aShape = DefiningWayName[dfMeans] then
+               lDef:=dfMeans
+            else if aShape = DefiningWayName[dfEquals] then
+               lDef:=dfEquals
+            else lDef:=dfEmpty;
+            case lDef of
+               dfEquals:
+                  aItem^.nContent:=new(FunctorDefinitionPtr,
+                                       Init(lPos,lRedefinition,FunctorPatternPtr(lPattern),
+                                            lType,lDef,Read_Definiens));
+               dfMeans:
+                  aItem^.nContent:=new(FunctorDefinitionPtr,
+                                       Init(lPos,lRedefinition,FunctorPatternPtr(lPattern),
+                                            lType,lDef,Read_Definiens));
+               dfEmpty:
+                  aItem^.nContent:=new(FunctorDefinitionPtr,
+                                       Init(lPos,lRedefinition,FunctorPatternPtr(lPattern),
+                                            lType,lDef,nil));
+
+            endcases;
+         end;
+      itDefMode:
+         begin
+            lRedefinition:=false;
+            if (nState= eStart) and (nElName = XMLElemName[elRedefine]) then
+            begin
+               NextElementState;
+               NextElementState;
+               lRedefinition:=true;
+            end;
+            lPattern:=Read_ModePattern;
+            if (nState= eStart) and (nElName = ModeDefinitionSortName[defExpandableMode]) then
+            begin
+               NextElementState;
+               aItem^.nContent:=new(ExpandableModeDefinitionPtr,Init(CurPos,ModePatternPtr(lPattern),Read_Type));
+               NextElementState;
+            end
+            else if (nState= eStart) and (nElName = ModeDefinitionSortName[defStandardMode]) then
+            begin
+               NextElementState;
+               lType:=nil;
+               if (nState= eStart) and (nElName = XMLElemName[elTypeSpecification]) then
+               begin
+                  NextElementState;
+                  lType:=Read_Type;
+                  NextElementState;
+               end;
+               aItem^.nContent:=new(StandardModeDefinitionPtr,Init(CurPos,lRedefinition,ModePatternPtr(lPattern),
+                                                                   lType,Read_Definiens));
+               NextElementState;
+            end;
+         end;
+      itDefAttr:
+         begin
+            lRedefinition:=false;
+            if (nState= eStart) and (nElName = XMLElemName[elRedefine]) then
+            begin
+               NextElementState;
+               NextElementState;
+               lRedefinition:=true;
+            end;
+            lPattern:=Read_AttributePattern;
+            aItem^.nContent:=new(AttributeDefinitionPtr,Init(CurPos,lRedefinition,AttributePatternPtr(lPattern),
+                                                             Read_Definiens));
+         end;
+      itDefStruct:
+         begin
+            NextElementState;
+            lTyps:=new(PList,Init(0));
+            while nState <> eEnd do
+               lTyps^.Insert(Read_Type);
+            NextElementState;
+            lPos:=GetAttrPos;
+            lNr:=GetIntAttr(XMLAttrName[atNr]);
+            NextElementState;
+            lList:=nil;
+            if (nState = eStart) and (nElName = XMLElemName[elLoci]) then
+               lList:=Read_Loci;
+            lFields:=new(PList,Init(0));
+            while (nState = eStart) and (nElName = XMLElemName[elFieldSegment]) do
+            begin
+               lFieldSgmPos:=GetAttrPos;
+               NextElementState;
+               lSels:=new(PList,Init(0));
+               while (nState = eStart) and (nElName = XMLElemName[elSelector]) do
+               begin
+                  lSels^.Insert(new(FieldSymbolPtr,Init(GetAttrPos,GetIntAttr(XMLAttrName[atNr]))));
+                  NextElementState;
+                  NextElementState;
+               end;
+               lFields^.Insert(new(FieldSegmentPtr,Init(lFieldSgmPos,lSels,Read_Type)));
+               NextElementState;
+            end;
+            NextElementState;
+            aItem^.nContent:=new(StructureDefinitionPtr,Init(lPos,lTyps,lNr,lList,lFields));
+         end;
+      itPredSynonym, itPredAntonym, itFuncNotation, itModeNotation,
+      itAttrSynonym, itAttrAntonym:
+         begin
+            lPattern:=Read_Pattern;
+            aItem^.nContent:= new(NotationDeclarationPtr,
+                                  Init(lPos,aItem^.nItemKind,Read_Pattern,lPattern));
+         end;
+      itCluster:
+         if nState= eStart then
+            if nElName = ClusterRegistrationName[ExistentialRegistration] then
+            begin
+               lPos:=GetAttrPos;
+               NextElementState;
+               lList:=Read_AdjectiveList;
+               aItem^.nContent:=new(EClusterPtr,Init(lPos,lList,Read_Type));
+               NextElementState;
+            end
+            else if nElName = ClusterRegistrationName[ConditionalRegistration] then
+            begin
+               lPos:=GetAttrPos;
+               NextElementState;
+               lList:=Read_AdjectiveList;
+               lCons:=Read_AdjectiveList;
+               aItem^.nContent:=new(CClusterPtr,Init(lPos,lList,lCons,Read_Type));
+               NextElementState;
+            end
+            else if nElName = ClusterRegistrationName[FunctorialRegistration] then
+            begin
+               lPos:=GetAttrPos;
+               NextElementState;
+               lTrm:=Read_Term;
+               lCons:=Read_AdjectiveList;
+               lType:=nil;
+               if nState <> eEnd then
+                  lType:=Read_Type;
+               aItem^.nContent:=new(FClusterPtr,Init(lPos,lTrm,lCons,lType));
+               NextElementState;
+            end;
+      itIdentify:
+         begin
+            lPattern:=Read_Pattern;
+            aItem^.nContent:=new(IdentifyRegistrationPtr,Init(lPos,Read_Pattern,lPattern,
+                                                              new(PList,Init(0))));
+            while (nState = eStart) and (nElName = XMLElemName[elLociEquality]) do
+            begin
+               lPos:=GetAttrPos;
+               NextElementState;
+               lLocus:=Read_Locus;
+               IdentifyRegistrationPtr(aItem^.nContent)^.nEqLociList^.Insert(new(LociEqualityPtr,Init(lPos,lLocus,Read_Locus)));
+               NextElementState;
+            end;
+         end;
+      itPropertyRegistration:
+         begin
+            lPropertySort:=Str2PropertyKind(aShape);
+            case lPropertySort of
+               sySethood:
+                  begin
+                     aItem^.nContent:=new(SethoodRegistrationPtr,Init(lPos,lPropertySort,Read_Type));
+                     SethoodRegistrationPtr(aItem^.nContent)^.nJustification:=Read_Justification;
+                  end;
+            endcases;
+         end;
+      itReduction:
+         begin
+            lTrm:=Read_Term;
+            aItem^.nContent:=new(ReduceRegistrationPtr,Init(lPos,Read_Term,lTrm));
+         end;
+      itPragma: ;
+   endcases;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_TextProper: wsTextProperPtr;
+var lPos: Position;
+begin
+   NextElementState;
+   lPos.Line:=GetIntAttr( XMLAttrName[atLine]);
+   lPos.Col:= GetIntAttr( XMLAttrName[atCol]);
+   result:=new(wsTextProperPtr,Init(GetAttr(XMLAttrName[atArticleID]),
+                                    GetAttr(XMLAttrName[atArticleExt]),lPos));
+   if nDisplayInformationOnScreen then
+      DisplayLine(result^.nBlockPos.Line,0);
+   CurPos:=result^.nBlockPos;
+   if (nState= eStart) and (nElName = BlockName[blMain]) then
+   begin
+      NextElementState;
+      while (nState= eStart) and (nElName = XMLElemName[elItem]) do
+         result^.nItems^.Insert(Read_Item);
+   end;
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Block: wsBlockPtr;
+var lPos: Position;
+begin
+   lPos.Line:=GetIntAttr( XMLAttrName[atLine]);
+   lPos.Col:= GetIntAttr( XMLAttrName[atCol]);
+   result:=new(WSBlockPtr,Init(Str2BlockKind(GetAttr(XMLAttrName[atKind])),lPos));
+   if nDisplayInformationOnScreen then
+      DisplayLine(result^.nBlockPos.Line,0);
+   lPos.Line:=GetIntAttr( XMLAttrName[atPosLine]);
+   lPos.Col:= GetIntAttr( XMLAttrName[atPosCol]);
+   result^.nBlockEndPos:=lPos;
+   CurPos:=result^.nBlockPos;
+   NextElementState;
+   while (nState= eStart) and (nElName = XMLElemName[elItem]) do
+      result^.nItems^.Insert(Read_Item);
+   CurPos:=result^.nBlockEndPos;
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function InWSMizFileObj.Read_Item: wsItemPtr;
+var lStartTagNbr: integer;
+lItemKind: ItemKind;
+lShape: string;
+lPos: Position;
+begin
+   lItemKind:=Str2ItemKind(GetAttr(XMLAttrName[atKind]));
+   lPos.Line:=GetIntAttr( XMLAttrName[atLine]);
+   lPos.Col:= GetIntAttr( XMLAttrName[atCol]);
+   CurPos:=lPos;
+   if nDisplayInformationOnScreen then
+      DisplayLine(lPos.Line,0);
+   result:=new(WSItemPtr,Init(lItemKind,lPos));
+   lPos.Line:=GetIntAttr( XMLAttrName[atPosLine]);
+   lPos.Col:= GetIntAttr( XMLAttrName[atPosCol]);
+   result^.nItemEndPos:=lPos;
+   result^.nContent:=nil;
+   Read_ItemContentsAttr(result,lShape);
+   NextElementState;
+   lStartTagNbr := 0;
+   if nState <> eEnd then
+   begin
+      Read_ItemContents(result,lShape);
+      if (nState= eStart) and (nElName = XMLElemName[elBlock]) then
+         result^.nBlock:=Read_Block
+      else if result^.nContent = nil then
+      begin
+         repeat
+            if nState = eStart then
+               inc(lStartTagNbr)
+            else dec(lStartTagNbr);
+            NextElementState;
+         until ((nState = eEnd) and (lStartTagNbr = 0)) or
+            ((nState = eStart) and (nElName = XMLElemName[elBlock]));
+         if (nState= eStart) and (nElName = XMLElemName[elBlock]) then
+            result^.nBlock:=Read_Block;
+      end;
+   end;
+   CurPos:=lPos;
+   NextElementState;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+function Read_WSMizArticle(aFileName:string): wsTextProperPtr;
+var lInFile: InWSMizFilePtr;
+begin
+   InitWSLookupTables;
+   lInFile:=new(InWSMizFilePtr,OpenFile(aFileName));
+   result:=lInFile^.Read_TextProper;
+   dispose(lInFile,Done);
+   DisposeWSLookupTables;
+end;
+
+
+
+@* Prettyprinting WSM files.
+
+@<Publicly declared types in \texttt{wsmarticle.pas}@>=
+WSMizarPrinterPtr =  ^WSMizarPrinterObj; @/
+WSMizarPrinterObj =
+   object(TXTStreamObj) @t\1 @> @/
+      nDisplayInformationOnScreen: boolean; @/
+      nIndent:	integer;  {indenting}
+      constructor OpenFile(const aFileName:string ); @t\2 @>
+      destructor Done; virtual; @t\2 @>
+
+      procedure Print_Char( AChar: char ); @t\2 @>
+      procedure Print_NewLine; @t\2 @>
+      procedure Print_Number( const aNumber: integer); @t\2 @>
+      procedure Print_String( const aString: string); @t\2 @>
+      procedure Print_Indent; @t\2 @>
+
+      procedure Print_TextProper(aWSTextProper:WSTextProperPtr); virtual; @t\2 @>
+      procedure Print_Item(aWSItem:WSItemPtr); virtual; @t\2 @>
+      procedure Print_SchemeNameInSchemeHead(aSch: SchemePtr); virtual; @t\2 @>
+      procedure Print_Block(aWSBlock:WSBlockPtr); virtual; @t\2 @>
+
+      procedure Print_Adjective(aAttr:AdjectiveExpressionPtr ); virtual; @t\2 @>
+      procedure Print_AdjectiveList( aCluster: PList ); virtual; @t\2 @>
+      procedure Print_Variable( aVar: VariablePtr); virtual; @t\2 @>
+      procedure Print_ImplicitlyQualifiedVariable( aSegm: ImplicitlyQualifiedSegmentPtr); virtual; @t\2 @>
+      procedure Print_VariableSegment( aSegm: QualifiedSegmentPtr); virtual; @t\2 @>
+      procedure Print_Type ( aTyp: TypePtr ); virtual; @t\2 @>
+      procedure Print_BinaryFormula ( aFrm:BinaryFormulaPtr ); virtual; @t\2 @>
+      procedure Print_PrivatePredicativeFormula ( aFrm: PrivatePredicativeFormulaPtr ); virtual; @t\2 @>
+      procedure Print_Formula ( aFrm:FormulaPtr ); virtual; @t\2 @>
+      procedure Print_OpenTermList ( aTrmList:PList ); virtual; @t\2 @>
+      procedure Print_TermList ( aTrmList:PList ); virtual; @t\2 @>
+      procedure Print_SimpleTermTerm ( aTrm: SimpleTermPtr ); virtual; @t\2 @>
+      procedure Print_PrivateFunctorTerm ( aTrm: PrivateFunctorTermPtr ); virtual; @t\2 @>
+      procedure Print_Term ( aTrm: TermPtr ); virtual; @t\2 @>
+
+      procedure Print_TypeList ( aTypeList: PList ); virtual; @t\2 @>
+
+      procedure Print_Label(aLab:LabelPtr); virtual; @t\2 @>
+
+      procedure Print_Reference(aRef: LocalReferencePtr); virtual; @t\2 @>
+      procedure Print_References(aRefs: PList); virtual; @t\2 @>
+      procedure Print_StraightforwardJustification(aInf: StraightforwardJustificationPtr); virtual; @t\2 @>
+      procedure Print_SchemeNameInJustification(aInf: SchemeJustificationPtr); virtual; @t\2 @>
+      procedure Print_SchemeJustification(aInf: SchemeJustificationPtr); virtual; @t\2 @>
+      procedure Print_Justification(aInf: JustificationPtr; aBlock:wsBlockPtr); virtual; @t\2 @>
+      procedure Print_Linkage; virtual; @t\2 @>
+      procedure Print_RegularStatement(aRStm:RegularStatementPtr; aBlock:wsBlockPtr); virtual; @t\2 @>
+      procedure Print_CompactStatement(aCStm:CompactStatementPtr; aBlock:wsBlockPtr); virtual; @t\2 @>
+      procedure Print_Proposition(aProp:PropositionPtr); virtual; @t\2 @>
+
+      procedure Print_Conditions(aCond: PList); @t\2 @>
+      procedure Print_AssumptionConditions(aCond: AssumptionPtr); virtual; @t\2 @>
+
+      procedure Print_Pattern(aPattern: PatternPtr); virtual; @t\2 @>
+      procedure Print_Locus( aLocus: LocusPtr); virtual; @t\2 @>
+      procedure Print_Loci( aLoci: PList); virtual; @t\2 @>
+      procedure Print_Definiens(aDef:DefiniensPtr); virtual; @t\2 @>
+
+      procedure Print_ReservedType(aResType: TypePtr); virtual; @t\2\2\2 @>
+   end;
+
+
+@ \node{Constructor.}
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+constructor WSMizarPrinterObj.OpenFile(const aFileName:string);
+begin
+   inherited InitFile(AFileName);
+   rewrite(nFile);
+   nIndent := 0;
+   nDisplayInformationOnScreen:=false;
+end;
+
+destructor WSMizarPrinterObj.Done;
+begin
+   close(nFile);
+   inherited Done;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Char ( aChar: char );
+begin
+   write(nFile,aChar);
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_NewLine;
+begin
+   writeln(nFile);
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Number( const aNumber: integer);
+begin
+   write(nFile,aNumber);
+   Print_Char(' ');
+end;
+
+@ The comment is translated from the Polish comment ``{?? czy na pewno
+trzeba robic konwersje}'', so I may be mistranslating.
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_String ( const aString: string );
+var i: integer;
+begin
+   write(nFile,XMLToStr(aString)); {Do you really need to do conversions?}
+   Print_Char(' ');
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Indent;
+var i:integer;
+begin
+   for i:=1 to nIndent do Print_Char(' ');
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Adjective(aAttr:AdjectiveExpressionPtr);
+begin
+   case aAttr^.nAdjectiveSort of
+      wsAdjective:
+         with AdjectivePtr(aAttr)^ do
+      begin
+         if  nArgs^.Count <> 0 then
+            Print_TermList( nArgs );
+         Print_String(AttributeName[nAdjectiveSymbol]);
+      end;
+      wsNegatedAdjective:
+         begin
+            Print_String(TokenName[sy_Non]);
+            Print_Adjective(NegatedAdjectivePtr(aAttr)^.nArg);
+         end;
+   endcases;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_AdjectiveList(aCluster: PList);
+var i: integer;
+begin
+   with aCluster^ do
+      for i:=0 to Count-1 do
+      begin
+         Print_Adjective( Items^[i]);
+      end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Variable( aVar: VariablePtr);
+begin
+   with aVar ^ do
+   begin
+      Print_String(IdentRepr(nIdent));
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_ImplicitlyQualifiedVariable( aSegm: ImplicitlyQualifiedSegmentPtr);
+begin
+   Print_Variable( aSegm^.nIdentifier);
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_VariableSegment( aSegm: QualifiedSegmentPtr);
+var i: integer;
+begin
+   case aSegm^.nSegmentSort of
+      ikImplQualifiedSegm:
+         Print_ImplicitlyQualifiedVariable( ImplicitlyQualifiedSegmentPtr(aSegm));
+      ikExplQualifiedSegm:
+         with ExplicitlyQualifiedSegmentPtr(aSegm)^ do
+      begin
+         Print_Variable( nIdentifiers.Items^[0]);
+         for i:=1 to nIdentifiers^.Count-1 do
+         begin
+            Print_String(',');
+            Print_Variable( nIdentifiers^.Items^[i]);
+         end;
+         Print_String(TokenName[sy_Be]);
+         Print_Type(nType);
+      end;
+   endcases;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_OpenTermList ( aTrmList:PList );
+var i: integer;
+begin
+   if aTrmList^.Count > 0 then
+   begin
+      Print_Term(aTrmList^.Items^[0]);
+      for i:=1 to aTrmList^.Count-1 do
+      begin
+         Print_String(',');
+         Print_Term(aTrmList^.Items^[i]);
+      end;
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_TermList ( aTrmList:PList );
+var i: integer;
+begin
+   if aTrmList^.Count > 0 then
+   begin
+      Print_String('(');
+      Print_Term(aTrmList^.Items^[0]);
+      for i:=1 to aTrmList^.Count-1 do
+      begin
+         Print_String(',');
+         Print_Term(aTrmList^.Items^[i]);
+      end;
+      Print_String(')');
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Type ( aTyp: TypePtr);
+begin
+   with aTyp^ do
+   begin
+      case aTyp^.nTypeSort of
+         wsStandardType:
+            with StandardTypePtr(aTyp)^ do
+         begin
+            if  nArgs^.Count = 0 then
+               Print_String(ModeName[nModeSymbol])
+            else
+            begin
+               Print_String('(');
+               Print_String(ModeName[nModeSymbol]);
+               Print_String(TokenName[sy_Of]);
+               Print_OpenTermList(nArgs);
+               Print_String(')');
+            end;
+         end;
+         wsStructureType:
+            with StructTypePtr(aTyp)^ do
+         begin
+            if  nArgs^.Count = 0 then
+               Print_String(StructureName[nStructSymbol])
+            else
+            begin
+               Print_String('(');
+               Print_String(StructureName[nStructSymbol]);
+               Print_String(TokenName[sy_Over]);
+               Print_OpenTermList(nArgs);
+               Print_String(')');
+            end;
+         end;
+         wsClusteredType:
+            with ClusteredTypePtr(aTyp)^ do
+         begin
+            Print_AdjectiveList(nAdjectiveCluster);
+            Print_Type(nType);
+         end;
+         wsErrorType:
+            begin
+            end;
+      endcases;
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_BinaryFormula ( aFrm:BinaryFormulaPtr );
+begin
+   Print_String('(');
+   Print_Formula(aFrm^.nLeftArg);
+   case aFrm^.nFormulaSort of
+      wsConjunctiveFormula: Print_String(TokenName[sy_Ampersand]);
+      wsDisjunctiveFormula: Print_String(TokenName[sy_Or]);
+      wsConditionalFormula: Print_String(TokenName[sy_Implies]);
+      wsBiconditionalFormula: Print_String(TokenName[sy_Iff]);
+      wsFlexaryConjunctiveFormula:
+         begin
+            Print_String(TokenName[sy_Ampersand]);
+            Print_String(TokenName[sy_Ellipsis]);
+            Print_String(TokenName[sy_Ampersand]);
+         end;
+      wsFlexaryDisjunctiveFormula:
+         begin
+            Print_String(TokenName[sy_Or]);
+            Print_String(TokenName[sy_Ellipsis]);
+            Print_String(TokenName[sy_Or]);
+         end;
+   endcases;
+   Print_Formula(aFrm^.nRightArg);
+   Print_String(')');
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_PrivatePredicativeFormula ( aFrm: PrivatePredicativeFormulaPtr );
+begin
+   with PrivatePredicativeFormulaPtr(aFrm)^ do
+   begin
+      Print_String(IdentRepr(nPredIdNr));
+      Print_String('[');
+      Print_OpenTermList( nArgs);
+      Print_String(']');
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Formula ( aFrm: FormulaPtr );
+var i: Integer;
+lNeg: boolean;
+lFrm: FormulaPtr;
+begin
+   case aFrm^.nFormulaSort of
+      wsNegatedFormula:
+         begin
+            Print_String(TokenName[sy_Not]);
+            Print_Formula(NegativeFormulaPtr(aFrm)^.nArg);
+         end;
+      wsConjunctiveFormula,wsDisjunctiveFormula,
+      wsConditionalFormula,wsBiconditionalFormula,
+      wsFlexaryConjunctiveFormula,wsFlexaryDisjunctiveFormula:
+         Print_BinaryFormula(BinaryFormulaPtr(aFrm));
+      wsPredicativeFormula:
+         with PredicativeFormulaPtr(aFrm)^ do
+      begin
+         Print_String('(');
+         if nLeftArgs^.Count <> 0 then
+         begin
+            Print_OpenTermList( nLeftArgs);
+         end;
+         Print_String(PredicateName[nPredNr]);
+         if nRightArgs^.Count <> 0 then
+         begin
+            Print_OpenTermList( nRightArgs);
+         end;
+         Print_String(')');
+      end;
+      wsMultiPredicativeFormula:
+         with MultiPredicativeFormulaPtr(aFrm)^ do
+      begin
+         Print_String('(');
+         lFrm:=nScraps.Items^[0];
+         lNeg:=lFrm^.nFormulaSort = wsNegatedFormula;
+         if lNeg then
+            lFrm:=NegativeFormulaPtr(lFrm)^.nArg;
+         with PredicativeFormulaPtr(lFrm)^ do
+         begin
+            if nLeftArgs^.Count <> 0 then
+               Print_OpenTermList( nLeftArgs);
+            if lNeg then
+            begin
+               Print_String(TokenName[sy_Does]);
+               Print_String(TokenName[sy_Not]);
+            end;
+            Print_String(PredicateName[nPredNr]);
+            if nRightArgs^.Count <> 0 then
+               Print_OpenTermList( nRightArgs);
+         end;
+         for i:=1 to nScraps.Count - 1 do
+         begin
+            lFrm:=nScraps.Items^[i];
+            lNeg:=lFrm^.nFormulaSort = wsNegatedFormula;
+            if lNeg then
+               lFrm:=NegativeFormulaPtr(lFrm)^.nArg;
+            with RightSideOfPredicativeFormulaPtr(lFrm)^ do
+            begin
+               if lNeg then
+               begin
+                  Print_String(TokenName[sy_Does]);
+                  Print_String(TokenName[sy_Not]);
+               end;
+               Print_String(PredicateName[nPredNr]);
+               if nRightArgs^.Count <> 0 then
+                  Print_OpenTermList( nRightArgs);
+            end;
+         end;
+         Print_String(')');
+      end;
+      wsPrivatePredicateFormula:
+         Print_PrivatePredicativeFormula ( PrivatePredicativeFormulaPtr(aFrm));
+      wsAttributiveFormula:
+         with AttributiveFormulaPtr(aFrm)^ do
+      begin
+         Print_String('(');
+         Print_Term(nSubject);
+         Print_String(TokenName[sy_Is]);
+         Print_AdjectiveList(nAdjectives);
+         Print_String(')');
+      end;
+      wsQualifyingFormula:
+         with QualifyingFormulaPtr(aFrm)^ do
+      begin
+         Print_String('(');
+         Print_Term(nSubject);
+         Print_String(TokenName[sy_Is]);
+         Print_Type(nType);
+         Print_String(')');
+      end;
+      wsUniversalFormula:
+         with QuantifiedFormulaPtr( aFrm)^ do
+      begin
+         Print_String('(');
+         Print_String(TokenName[sy_For]);
+         Print_VariableSegment(QuantifiedFormulaPtr(aFrm)^.nSegment);
+         Print_String(TokenName[sy_Holds]);
+         Print_Formula(QuantifiedFormulaPtr(aFrm)^.nScope);
+         Print_String(')');
+      end;
+      wsExistentialFormula:
+         with QuantifiedFormulaPtr( aFrm)^ do
+      begin
+         Print_String('(');
+         Print_String(TokenName[sy_Ex]);
+         Print_VariableSegment(QuantifiedFormulaPtr(aFrm)^.nSegment);
+         Print_String(TokenName[sy_St]);
+         Print_Formula(QuantifiedFormulaPtr(aFrm)^.nScope);
+         Print_String(')');
+      end;
+      wsContradiction:
+         begin
+            Print_String(TokenName[sy_Contradiction]);
+         end;
+      wsThesis:
+         begin
+            Print_String(TokenName[sy_Thesis]);
+         end;
+      wsErrorFormula:
+         begin
+         end;
+   endcases;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_SimpleTermTerm ( aTrm: SimpleTermPtr );
+begin
+   Print_String(IdentRepr(SimpleTermPtr(aTrm)^.nIdent));
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_PrivateFunctorTerm ( aTrm: PrivateFunctorTermPtr );
+begin
+   Print_String(IdentRepr(aTrm^.nFunctorIdent));
+   Print_String('(');
+   Print_OpenTermList(aTrm^.nArgs);
+   Print_String(')');
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Term ( aTrm: TermPtr );
+var i,j: integer;
+lPrintWhere: boolean;
+begin
+   case aTrm^.nTermSort of
+      wsPlaceholderTerm:
+         begin
+            Print_Char('$');
+            Print_Number(PlaceholderTermPtr(aTrm)^.nLocusNr);
+         end;
+      wsSimpleTerm:
+         begin
+            Print_SimpleTermTerm(SimpleTermPtr(aTrm));
+         end;
+      wsNumeralTerm:
+         begin
+            Print_Number(NumeralTermPtr(aTrm)^.nValue);
+         end;
+      wsInfixTerm:
+         with InfixTermPtr(aTrm)^ do
+      begin
+         Print_String('(');
+         if nLeftArgs^.Count <> 0 then
+         begin
+            Print_TermList( nLeftArgs);
+         end;
+         Print_String(FunctorName[nFunctorSymbol]);
+         if nRightArgs^.Count <> 0 then
+         begin
+            Print_TermList( nRightArgs);
+         end;
+         Print_String(')');
+      end;
+      wsCircumfixTerm:
+         with CircumfixTermPtr(aTrm)^ do
+      begin
+         Print_String(LeftBracketName[nLeftBracketSymbol]);
+         Print_OpenTermList(nArgs);
+         Print_String(RightBracketName[nRightBracketSymbol]);
+      end;
+      wsPrivateFunctorTerm:
+         Print_PrivateFunctorTerm(PrivateFunctorTermPtr(aTrm));
+      wsAggregateTerm:
+         with AggregateTermPtr(aTrm)^ do
+      begin
+         Print_String(StructureName[nStructSymbol]);
+         Print_String(TokenName[sy_StructLeftBracket]);
+         Print_OpenTermList( nArgs);
+         Print_String(TokenName[sy_StructRightBracket]);
+      end;
+      wsSelectorTerm:
+         with SelectorTermPtr(aTrm)^ do
+      begin
+         Print_String('(');
+         Print_String(TokenName[sy_The]);
+         Print_String(SelectorName[nSelectorSymbol]);
+         Print_String(TokenName[sy_Of]);
+         Print_Term( nArg);
+         Print_String(')');
+      end;
+      wsInternalSelectorTerm:
+         with InternalSelectorTermPtr(aTrm)^ do
+      begin
+         Print_String(TokenName[sy_The]);
+         Print_String(SelectorName[nSelectorSymbol]);
+      end;
+      wsForgetfulFunctorTerm:
+         with ForgetfulFunctorTermPtr(aTrm)^ do
+      begin
+         Print_String('(');
+         Print_String(TokenName[sy_The]);
+         Print_String(StructureName[nStructSymbol]);
+         Print_String(TokenName[sy_Of]);
+         Print_Term( nArg);
+         Print_String(')');
+      end;
+      wsInternalForgetfulFunctorTerm:
+         with InternalForgetfulFunctorTermPtr(aTrm)^ do
+      begin
+         Print_String('(');
+         Print_String(TokenName[sy_The]);
+         Print_String(StructureName[nStructSymbol]);
+         Print_String(')');
+      end;
+      wsFraenkelTerm:
+         with FraenkelTermPtr(aTrm)^ do
+      begin
+         Print_String('{');
+         Print_Term(nSample);
+         if nPostqualification^.Count > 0 then
+         begin
+            lPrintWhere:=true;
+            for i := 0 to nPostqualification^.Count - 1 do
+               case QualifiedSegmentPtr(nPostqualification^.Items^[i])^.nSegmentSort of
+                  ikImplQualifiedSegm:
+                     with ImplicitlyQualifiedSegmentPtr(nPostqualification^.Items^[i])^ do
+                  begin
+                     Print_String(TokenName[sy_Where]);
+                     Print_Variable( nIdentifier);
+                  end;
+                  ikExplQualifiedSegm:
+                     with ExplicitlyQualifiedSegmentPtr(nPostqualification^.Items^[i])^ do
+                  begin
+                     if lPrintWhere then
+                     begin
+                        Print_String(TokenName[sy_Where]);
+                        lPrintWhere:=false;
+                     end;
+                     Print_Variable( nIdentifiers.Items^[0]);
+                     for j:=1 to nIdentifiers^.Count-1 do
+                     begin
+                        Print_String(',');
+                        Print_Variable( nIdentifiers^.Items^[j]);
+                     end;
+                     Print_String(TokenName[sy_Is]);
+                     Print_Type(nType);
+                     if i < nPostqualification^.Count - 1 then Print_String(',');
+                  end;
+               endcases;
+         end;
+         Print_String(':');
+         Print_Formula(nFormula);
+         Print_String('}');
+      end;
+      wsSimpleFraenkelTerm:
+         with SimpleFraenkelTermPtr(aTrm)^ do
+      begin
+         Print_String('(');
+         Print_String(TokenName[sy_The]);
+         Print_String(TokenName[sy_Set]);
+         Print_String(TokenName[sy_Of]);
+         Print_String(TokenName[sy_All]);
+         Print_Term(nSample);
+         if nPostqualification^.Count > 0 then
+         begin
+            lPrintWhere:=true;
+            for i := 0 to nPostqualification^.Count - 1 do
+               case QualifiedSegmentPtr(nPostqualification^.Items^[i])^.nSegmentSort of
+                  ikImplQualifiedSegm:
+                     with ImplicitlyQualifiedSegmentPtr(nPostqualification^.Items^[i])^ do
+                  begin
+                     Print_String(TokenName[sy_Where]);
+                     Print_Variable( nIdentifier);
+                  end;
+                  ikExplQualifiedSegm:
+                     with ExplicitlyQualifiedSegmentPtr(nPostqualification^.Items^[i])^ do
+                  begin
+                     if lPrintWhere then
+                     begin
+                        Print_String(TokenName[sy_Where]);
+                        lPrintWhere:=false;
+                     end;
+                     Print_Variable( nIdentifiers.Items^[0]);
+                     for j:=1 to nIdentifiers^.Count-1 do
+                     begin
+                        Print_String(',');
+                        Print_Variable( nIdentifiers^.Items^[j]);
+                     end;
+                     Print_String(TokenName[sy_Is]);
+                     Print_Type(nType);
+                     if i < nPostqualification^.Count - 1 then Print_String(',');
+                  end;
+               endcases;
+         end;
+         Print_String(')');
+      end;
+      wsQualificationTerm:
+         with QualifiedTermPtr(aTrm)^ do
+      begin
+         Print_String('(');
+         Print_Term(nSubject);
+         Print_String(TokenName[sy_Qua]);
+         Print_Type(nQualification);
+         Print_String(')');
+      end;
+      wsExactlyTerm:
+         with ExactlyTermPtr(aTrm)^ do
+      begin
+         Print_Term(nSubject);
+         Print_String(TokenName[sy_Exactly]);
+      end;
+      wsGlobalChoiceTerm:
+         begin
+            Print_String('(');
+            Print_String(TokenName[sy_The]);
+            Print_Type(ChoiceTermPtr(aTrm)^.nChoiceType);
+            Print_String(')');
+         end;
+      wsItTerm:
+         begin
+            Print_String(TokenName[sy_It]);
+         end;
+      wsErrorTerm:
+   endcases;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_TypeList ( aTypeList:PList );
+var i: integer;
+begin
+   if aTypeList^.Count > 0 then
+   begin
+      Print_Type(aTypeList^.Items^[0]);
+      for i:=1 to aTypeList^.Count-1 do
+      begin
+         Print_String(',');
+         Print_Type(aTypeList^.Items^[i]);
+      end;
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Label(aLab:LabelPtr);
+begin
+   if (aLab <> nil) and (aLab.nLabelIdNr > 0) then
+   begin
+      Print_String(IdentRepr(aLab^.nLabelIdNr));
+      Print_String(':');
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Proposition(aProp:PropositionPtr);
+begin
+   Print_Label(aProp^.nLab);
+   Print_Formula(aProp^.nSentence);
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_CompactStatement(aCStm:CompactStatementPtr; aBlock:wsBlockPtr);
+begin
+   with aCStm^ do
+   begin
+      Print_Proposition(nProp);
+      Print_Justification(nJustification,aBlock);
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Linkage;
+begin
+   Print_String(TokenName[sy_Then]);
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_RegularStatement(aRStm:RegularStatementPtr; aBlock:wsBlockPtr);
+var i: integer;
+begin
+   case aRStm^.nStatementSort of
+      stDiffuseStatement:
+         begin
+            Print_Label(DiffuseStatementPtr(aRStm)^.nLab);
+            Print_Block(aBlock);
+         end;
+      stCompactStatement:
+         begin
+            if (CompactStatementPtr(aRStm)^.nJustification^.nInfSort = infStraightforwardJustification) and
+                  StraightforwardJustificationPtr(CompactStatementPtr(aRStm)^.nJustification)^.nLinked then
+            begin
+               Print_Linkage;
+            end;
+            Print_CompactStatement(CompactStatementPtr(aRStm),aBlock);
+         end;
+      stIterativeEquality:
+         begin
+            if (CompactStatementPtr(aRStm)^.nJustification^.nInfSort = infStraightforwardJustification) and
+                  StraightforwardJustificationPtr(CompactStatementPtr(aRStm)^.nJustification)^.nLinked then
+            begin
+               Print_Linkage;
+            end;
+            Print_CompactStatement(CompactStatementPtr(aRStm),nil);
+            with IterativeEqualityPtr(aRStm)^ do
+               for i := 0 to nIterSteps^.Count - 1 do
+                  with IterativeStepPtr(nIterSteps^.Items^[i])^ do
+               begin
+                  Print_NewLine;
+                  Print_String(TokenName[sy_DotEquals]);
+                  Print_Term(nTerm);
+                  Print_Justification(nJustification,nil);
+               end;
+         end;
+   endcases;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Reference(aRef: LocalReferencePtr);
+begin
+   Print_String(IdentRepr(aRef^.nLabId));
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_References(aRefs: PList);
+var i: integer;
+begin
+   for i:= 0 to aRefs^.Count-1 do
+      with ReferencePtr(aRefs^.Items^[i])^ do
+   begin
+      case nRefSort of
+         LocalReference:
+            begin
+               Print_Reference(aRefs^.Items^[i]);
+            end;
+         TheoremReference:
+            begin
+               Print_String(MMLIdentifierName[TheoremReferencePtr(aRefs^.Items^[i])^.nArticleNr]);
+               Print_String(':');
+               Print_Number(TheoremReferencePtr(aRefs^.Items^[i])^.nTheoNr);
+            end;
+         DefinitionReference:
+            begin
+               Print_String(MMLIdentifierName[DefinitionReferencePtr(aRefs^.Items^[i])^.nArticleNr]);
+               Print_String(':');
+               Print_String('def');
+               Print_Number(DefinitionReferencePtr(aRefs^.Items^[i])^.nDEfNr);
+            end;
+      endcases;
+      if i < aRefs^.Count-1 then
+         Print_String(',');
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_StraightforwardJustification(aInf: StraightforwardJustificationPtr);
+begin
+   with aInf^ do
+   begin
+      if nReferences^.Count <> 0 then
+      begin
+         Print_String(TokenName[sy_By]);
+         Print_References(nReferences);
+      end;
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_SchemeNameInJustification(aInf: SchemeJustificationPtr);
+begin
+   Print_String(IdentRepr(aInf^.nSchemeIdNr));
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_SchemeJustification(aInf: SchemeJustificationPtr);
+begin
+   with aInf^ do
+   begin
+      Print_String(TokenName[sy_From]);
+      if nSchFileNr > 0 then
+      begin
+         Print_String(MMLIdentifierName[nSchFileNr]);
+         Print_String(':');
+         Print_String('sch');
+         Print_Number(nSchemeIdNr);
+      end
+      else if nSchemeIdNr > 0 then
+         Print_SchemeNameInJustification(aInf);
+      if nReferences^.Count > 0 then
+      begin
+         Print_String('(');
+         Print_References(nReferences);
+         Print_String(')');
+      end;
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Justification(aInf: JustificationPtr; aBlock:wsBlockPtr);
+begin
+   case aInf^.nInfSort of
+      infStraightforwardJustification:
+         Print_StraightforwardJustification(StraightforwardJustificationPtr(aInf));
+      infSchemeJustification:
+         Print_SchemeJustification(SchemeJustificationPtr(aInf));
+      infError,infSkippedProof:
+         begin
+         end;
+      infProof:
+         Print_Block(aBlock);
+   endcases;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Conditions(aCond: PList);
+var i: integer;
+begin
+   Print_String(TokenName[sy_That]);
+   Print_NewLine;
+   Print_Proposition(aCond^.Items^[0]);
+   for i:=1 to aCond^.Count-1 do
+   begin
+      Print_String(TokenName[sy_And]);
+      Print_NewLine;
+      Print_Proposition(aCond^.Items^[i]);
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_AssumptionConditions(aCond: AssumptionPtr);
+begin
+   case aCond^.nAssumptionSort of
+      SingleAssumption:
+         begin
+            Print_Proposition(SingleAssumptionPtr(aCond)^.nProp);
+         end;
+      CollectiveAssumption:
+         begin
+            Print_Conditions(CollectiveAssumptionPtr(aCond)^.nConditions);
+         end;
+   endcases;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Locus( aLocus: LocusPtr);
+begin
+   with aLocus ^ do
+   begin
+      Print_String(IdentRepr(nVarId));
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Loci( aLoci: PList);
+var i: integer;
+begin
+   if (aLoci = nil) or (aLoci^.Count = 0) then
+   else
+   begin
+      Print_Locus(aLoci^.Items^[0]);
+      for i:=1 to aLoci^.Count-1 do
+      begin
+         Print_String(',');
+         Print_Locus(aLoci^.Items^[i]);
+      end;
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Pattern(aPattern: PatternPtr);
+begin
+   case aPattern^.nPatternSort of
+      itDefPred:
+         with PredicatePatternPtr(aPattern)^ do
+      begin
+         Print_Loci(nLeftArgs);
+         Print_String(PredicateName[nPredSymbol]);
+         Print_Loci(nRightArgs);
+      end;
+      itDefFunc:
+         begin
+            case FunctorPatternPtr(aPattern)^.nFunctKind of
+               InfixFunctor:
+                  with InfixFunctorPatternPtr(aPattern)^ do
+               begin
+                  if (nLeftArgs <> nil) and (nLeftArgs^.Count >1) then
+                     Print_String('(');
+                  Print_Loci(nLeftArgs);
+                  if (nLeftArgs <> nil) and (nLeftArgs^.Count >1) then
+                     Print_String(')');
+                  Print_String(FunctorName[nOperSymb]);
+                  if (nRightArgs <> nil) and (nRightArgs^.Count >1) then
+                     Print_String('(');
+                  Print_Loci(nRightArgs);
+                  if (nRightArgs <> nil) and (nRightArgs^.Count >1) then
+                     Print_String(')');
+               end;
+               CircumfixFunctor:
+                  with CircumfixFunctorPatternPtr(aPattern)^ do
+               begin
+                  Print_String(LeftBracketName[nLeftBracketSymb]);
+                  Print_Loci(nArgs);
+                  Print_String(RightBracketName[nRightBracketSymb]);
+               end;
+            endcases;
+         end;
+      itDefMode:
+         with ModePatternPtr(aPattern)^ do
+      begin
+         Print_String(ModeName[nModeSymbol]);
+         if (nArgs <> nil) and (nArgs^.Count > 0) then
+         begin
+            Print_String(TokenName[sy_Of]);
+            Print_Loci(nArgs);
+         end;
+      end;
+      itDefAttr:
+         with AttributePatternPtr(aPattern)^ do
+      begin
+         Print_Locus(nArg);
+         Print_String(TokenName[sy_Is]);
+         Print_Loci(nArgs);
+         Print_String(AttributeName[nAttrSymbol]);
+      end;
+   endcases;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Definiens(aDef:DefiniensPtr);
+var i: integer;
+begin
+   if aDef <> nil then
+      with DefiniensPtr(aDef)^ do
+   begin
+      case nDefSort of
+         SimpleDefiniens:
+            begin
+               if (nDefLabel <> nil) and (nDefLabel^.nLabelIdNr > 0) then
+               begin
+                  Print_String(':');
+                  Print_Label(nDefLabel);
+               end;
+               with SimpleDefiniensPtr(aDef)^,nExpression^ do
+               case nExprKind of
+                  exTerm: Print_Term(TermPtr(nExpr));
+                  exFormula: Print_Formula(FormulaPtr(nExpr));
+               endcases;
+            end;
+         ConditionalDefiniens:
+            begin
+               if (nDefLabel <> nil) and (nDefLabel^.nLabelIdNr > 0) then
+               begin
+                  Print_String(':');
+                  Print_Label(nDefLabel);
+               end;
+               with ConditionalDefiniensPtr(aDef)^ do
+               begin
+                  for i:=0 to nConditionalDefiniensList^.Count-1 do
+                  begin
+                     with PartDefPtr(nConditionalDefiniensList^.Items^[I])^ do
+                     begin
+                        with nPartDefiniens^ do
+                           case nExprKind of
+                              exTerm: Print_Term(TermPtr(nExpr));
+                              exFormula: Print_Formula(FormulaPtr(nExpr));
+                           endcases;
+                        Print_String(TokenName[sy_If]);
+                        Print_Formula(nGuard);
+                     end;
+                     if (i>=0) and (i<nConditionalDefiniensList^.Count-1) then
+                     begin
+                        Print_String(',');
+                        Print_NewLine;
+                     end;
+                  end;
+                  if nOtherwise <> nil then
+                     with nOtherwise^ do
+                  begin
+                     Print_String(TokenName[sy_Otherwise]);
+                     case nExprKind of
+                        exTerm: Print_Term(TermPtr(nExpr));
+                        exFormula: Print_Formula(FormulaPtr(nExpr));
+                     endcases;
+                  end;
+               end;
+            end;
+      end;
+   endcases;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Block(aWSBlock:WSBlockPtr);
+var i,lIndent: integer;
+begin
+   with aWSBlock^ do
+   begin
+      lIndent:=nIndent;
+      Print_NewLine;
+      Print_Indent;
+      case nBlockKind of
+         blDiffuse:
+            begin
+               Print_String(TokenName[sy_Now]);
+               Print_NewLine;
+            end;
+         blHereby:
+            begin
+               Print_String(TokenName[sy_Now]);
+               Print_NewLine;
+            end;
+         blProof:
+            begin
+               Print_String(TokenName[sy_Proof]);
+               Print_NewLine;
+            end;
+         blDefinition:
+            begin
+               Print_String(TokenName[sy_Definition]);
+               Print_NewLine;
+            end;
+         blNotation:
+            begin
+               Print_String(TokenName[sy_Notation]);
+               Print_NewLine;
+            end;
+         blRegistration:
+            begin
+               Print_String(TokenName[sy_Registration]);
+               Print_NewLine;
+            end;
+         blCase:
+            Print_String(TokenName[sy_Case]);
+         blSuppose:
+            Print_String(TokenName[sy_Suppose]);
+         blPublicScheme:
+            ;
+      endcases;
+      for i := 0 to nItems^.Count - 1 do
+      begin
+         Print_Item(nItems^.Items^[i]);
+      end;
+      nIndent:=lIndent;
+      Print_Indent;
+      Print_String(TokenName[sy_End]);
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_TextProper(aWSTextProper:WSTextProperPtr);
+var i: integer;
+begin
+   with aWSTextProper^ do
+   begin
+      for i := 0 to nItems^.Count - 1 do
+         Print_Item(nItems^.Items^[i]);
+   end;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_ReservedType(aResType: TypePtr);
+begin
+   Print_Type(aResType);
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_SchemeNameInSchemeHead(aSch: SchemePtr);
+begin
+   Print_String(IdentRepr(aSch^.nSchemeIdNr));
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure WSMizarPrinterObj.Print_Item(aWSItem:WSItemPtr);
+var i,j,lIndent: integer;
+begin
+   with aWSItem^ do
+   begin
+      CurPos:=nItemPos;
+      if nDisplayInformationOnScreen then
+         DisplayLine(CurPos.Line,ErrorNbr);
+      case nItemKind of
+         itDefinition:
+            begin
+               Print_Block(nBlock);
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itSchemeBlock:
+            begin
+               Print_Block(nBlock);
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itSchemeHead:
+            with SchemePtr(nContent)^ do
+         begin
+            Print_String(TokenName[sy_Scheme]);
+            Print_SchemeNameInSchemeHead(SchemePtr(nContent));
+            Print_String('{');
+            for j:=0 to nSchemeParams^.Count-1 do
+            begin
+               case SchemeSegmentPtr(nSchemeParams^.Items^[j])^.nSegmSort of
+                  PredicateSegment:
+                     with PredicateSegmentPtr(nSchemeParams^.Items^[j])^ do
+                  begin
+                     Print_Variable( nVars^.Items^[0]);
+                     for i:=1 to nVars^.Count-1 do
+                     begin
+                        Print_String(',');
+                        Print_Variable( nVars^.Items^[i]);
+                     end;
+                     Print_String('[');
+                     Print_TypeList(nTypeExpList);
+                     Print_String(']');
+                  end;
+                  FunctorSegment:
+                     with FunctorSegmentPtr(nSchemeParams^.Items^[j])^ do
+                  begin
+                     Print_Variable( nVars^.Items^[0]);
+                     for i:=1 to nVars.Count-1 do
+                     begin
+                        Print_String(',');
+                        Print_Variable( nVars^.Items^[i]);
+                     end;
+                     Print_String('(');
+                     Print_TypeList(nTypeExpList);
+                     Print_String(')');
+                     Print_String(TokenName[sy_Arrow]);
+                     Print_Type(nSpecification);
+                  end;
+               endcases;
+               if (j >= 0) and (j < nSchemeParams^.Count-1) then
+                  Print_String(',');
+            end;
+            Print_String('}');
+            Print_String(':');
+            Print_Newline;
+            Print_Formula(nSchemeConclusion);
+            Print_NewLine;
+            if (nSchemePremises <> nil) and (nSchemePremises^.Count > 0) then
+            begin
+               Print_String(TokenName[sy_Provided]);
+               Print_Proposition(nSchemePremises^.Items^[0]);
+               for i:=1 to nSchemePremises^.Count-1 do
+               begin
+                  Print_String(TokenName[sy_And]);
+                  Print_NewLine;
+                  Print_Proposition(nSchemePremises^.Items^[i]);
+               end;
+            end;
+            Print_String(TokenName[sy_Proof]);
+            Print_NewLine;
+         end;
+         itTheorem:
+            with CompactStatementPtr(nContent)^ do
+         begin
+            Print_NewLine;
+            nIndent:=0;
+            Print_String(TokenName[sy_Theorem]);
+            Print_Label(nProp^.nLab);
+            Print_NewLine;
+            nIndent:=2;
+            Print_Indent;
+            Print_Formula(nProp^.nSentence);
+            nIndent:=0;
+            Print_Justification(nJustification,nBlock);
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itAxiom:
+            begin
+               
+            end;
+         itReservation:
+            with ReservationSegmentPtr(nContent)^ do
+         begin
+            Print_NewLine;
+            Print_String(TokenName[sy_reserve]);
+            Print_Variable( nIdentifiers.Items^[0]);
+            for i:=1 to nIdentifiers^.Count-1 do
+            begin
+               Print_String(',');
+               Print_Variable( nIdentifiers^.Items^[i]);
+            end;
+            Print_String(TokenName[sy_For]);
+            Print_ReservedType(nResType);
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itSection:
+            begin
+               Print_NewLine;
+               Print_String(TokenName[sy_Begin]);
+               Print_NewLine;
+            end;
+         itRegularStatement:
+            begin
+               Print_RegularStatement(RegularStatementPtr(nContent),nBlock);
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itChoice:
+            with ChoiceStatementPtr(nContent)^ do
+         begin
+            if (nJustification^.nInfSort = infStraightforwardJustification) and
+                  StraightforwardJustificationPtr(nJustification)^.nLinked then
+            begin
+               Print_Linkage;
+            end;
+            Print_String(TokenName[sy_Consider]);
+            Print_VariableSegment( nQualVars^.Items^[0]);
+            for i:= 1 to  nQualVars^.Count-1 do
+            begin
+               Print_String(',');
+               Print_VariableSegment( nQualVars^.Items^[i]);
+            end;
+            if (nConditions <> nil) and (nConditions^.Count > 0) then
+            begin
+               Print_String(TokenName[sy_Such]);
+               Print_Conditions(nConditions);
+            end;
+            Print_Justification(nJustification,nil);
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itReconsider:
+            with TypeChangingStatementPtr(nContent)^ do
+         begin
+            if (nJustification^.nInfSort = infStraightforwardJustification) and
+                  StraightforwardJustificationPtr(nJustification)^.nLinked then
+            begin
+               Print_Linkage;
+            end;
+            Print_String(TokenName[sy_Reconsider]);
+            for i:=0 to nTypeChangeList^.Count-1 do
+            begin
+               case TypeChangePtr(nTypeChangeList^.Items^[i])^.nTypeChangeKind of
+                  Equating:
+                     begin
+                        Print_Variable(TypeChangePtr(nTypeChangeList^.Items^[i])^.nVar);
+                        Print_String('=');
+                        Print_Term(TypeChangePtr(nTypeChangeList^.Items^[i])^.nTermExpr);
+                     end;
+                  VariableIdentifier:
+                     begin
+                        Print_Variable(TypeChangePtr(nTypeChangeList.Items^[i])^.nVar);
+                     end;
+               endcases;
+               if (i >= 0) and (i < nTypeChangeList^.Count-1) then
+                  Print_String(',');
+            end;
+            Print_String(TokenName[sy_As]);
+            Print_Type(nTypeExpr);
+            Print_Justification(nJustification,nil);
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itPrivFuncDefinition:
+            with PrivateFunctorDefinitionPtr(nContent)^ do
+         begin
+            Print_String(TokenName[sy_DefFunc]);
+            Print_Variable(nFuncId);
+            Print_String('(');
+            Print_TypeList(nTypeExpList);
+            Print_String(')');
+            Print_String('=');
+            Print_Term(nTermExpr);
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itPrivPredDefinition:
+            with PrivatePredicateDefinitionPtr(nContent)^ do
+         begin
+            Print_String(TokenName[sy_DefPred]);
+            Print_Variable(nPredId);
+            Print_String('[');
+            Print_TypeList(nTypeExpList);
+            Print_String(']');
+            Print_String(TokenName[sy_Means]);
+            Print_Formula(nSentence);
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itConstantDefinition:
+            with ConstantDefinitionPtr(nContent)^ do
+         begin
+            Print_String(TokenName[sy_Set]);
+            Print_Variable(nVarId);
+            Print_String('=');
+            Print_Term(nTermExpr);
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itLociDeclaration,
+         itGeneralization:
+            begin
+               Print_String(TokenName[sy_Let]);
+               Print_VariableSegment( QualifiedSegmentPtr(nContent));
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itAssumption:
+            begin
+               Print_String(TokenName[sy_Assume]);
+               Print_AssumptionConditions(AssumptionPtr(nContent));
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itExistentialAssumption:
+            with ExistentialAssumptionPtr(nContent)^ do
+         begin
+            Print_String(TokenName[sy_Given]);
+            Print_VariableSegment( nQVars^.Items^[0]);
+            for i := 1 to  nQVars^.Count-1 do
+            begin
+               Print_String(',');
+               Print_VariableSegment( nQVars^.Items^[i]);
+            end;
+            Print_String(TokenName[sy_Such]);
+            Print_String(TokenName[sy_That]);
+            Print_NewLine;
+            Print_Proposition(nConditions^.Items^[0]);
+            for i:=1 to nConditions^.Count-1 do
+            begin
+               Print_String(TokenName[sy_And]);
+               Print_NewLine;
+               Print_Proposition(nConditions^.Items^[i]);
+            end;
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itExemplification:
+            with ExamplePtr(nContent)^ do
+         begin
+            Print_String(TokenName[sy_Take]);
+            if nVarId <> nil then
+            begin
+               Print_Variable(nVarId);
+               if nTermExpr <> nil then
+               begin
+                  Print_String('=');
+               end;
+            end;
+            if nTermExpr <> nil then
+               Print_Term(nTermExpr);
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itPerCases:
+            begin
+               if (JustificationPtr(nContent)^.nInfSort = infStraightforwardJustification) and
+                     StraightforwardJustificationPtr(nContent)^.nLinked then
+               begin
+                  Print_Linkage;
+               end;
+               Print_String(TokenName[sy_Per]);
+               Print_String(TokenName[sy_Cases]);
+               Print_Justification(JustificationPtr(nContent),nil);
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itConclusion:
+            begin
+               Print_String(TokenName[sy_Thus]);
+               Print_RegularStatement(RegularStatementPtr(nContent),nBlock);
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itCaseBlock:
+            begin
+               Print_Block(nBlock);
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itCaseHead,
+         itSupposeHead:
+            begin
+               Print_AssumptionConditions(AssumptionPtr(nContent));
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itCorrCond:
+            begin
+               Print_String(CorrectnessName[CorrectnessConditionPtr(nContent)^.nCorrCondSort]);
+               Print_Justification(CorrectnessConditionPtr(nContent)^.nJustification,nBlock);
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itCorrectness:
+            begin
+               Print_String(TokenName[sy_Correctness]);
+               Print_Justification(CorrectnessPtr(nContent)^.nJustification,nBlock);
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itProperty:
+            begin
+               Print_String(PropertyName[PropertyPtr(nContent)^.nPropertySort]);
+               Print_Justification(PropertyPtr(nContent)^.nJustification,nBlock);
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itDefMode:
+            with ModeDefinitionPtr(nContent)^ do
+         begin
+            if nRedefinition then
+            begin
+               Print_String(TokenName[sy_Redefine]);
+            end;
+            Print_String(TokenName[sy_Mode]);
+            Print_Pattern(nDefModePattern);
+            case nDefKind of
+               defExpandableMode:
+                  begin
+                     Print_String(TokenName[sy_Is]);
+                     Print_Type(ExpandableModeDefinitionPtr(nContent)^.nExpansion);
+                  end;
+               defStandardMode:
+                  with StandardModeDefinitionPtr(nContent)^ do
+               begin
+                  if nSpecification <> nil then
+                  begin
+                     Print_String(TokenName[sy_Arrow]);
+                     Print_Type(nSpecification);
+                  end;
+                  if nDefiniens <> nil then
+                  begin
+                     Print_String(TokenName[sy_Means]);
+                     Print_NewLine;
+                     Print_Definiens(nDefiniens);
+                  end;
+               end;
+            endcases;
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itDefAttr:
+            with AttributeDefinitionPtr(nContent)^ do
+         begin
+            if nRedefinition then
+            begin
+               Print_String(TokenName[sy_Redefine]);
+            end;
+            Print_String(TokenName[sy_Attr]);
+            Print_Pattern(nDefAttrPattern);
+            Print_String(TokenName[sy_Means]);
+            Print_NewLine;
+            Print_Definiens(nDefiniens);
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itDefPred:
+            with PredicateDefinitionPtr(nContent)^ do
+         begin
+            if nRedefinition then
+            begin
+               Print_String(TokenName[sy_Redefine]);
+            end;
+            Print_String(TokenName[sy_Pred]);
+            Print_Pattern(nDefPredPattern);
+            if nDefiniens <> nil then
+            begin
+               Print_String(TokenName[sy_Means]);
+               Print_NewLine;
+               Print_Definiens(nDefiniens);
+            end;
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itDefFunc:
+            with FunctorDefinitionPtr(nContent)^ do
+         begin
+            if nRedefinition then
+            begin
+               Print_String(TokenName[sy_Redefine]);
+            end;
+            Print_String(TokenName[sy_Func]);
+            Print_Pattern(nDefFuncPattern);
+            if nSpecification <> nil then
+            begin
+               Print_String(TokenName[sy_Arrow]);
+               Print_Type(nSpecification);
+            end;
+            case nDefiningWay of
+               dfEmpty:;
+               dfMeans:
+                  begin
+                     Print_String(TokenName[sy_Means]);
+                     Print_NewLine;
+                  end;
+               dfEquals:
+                  begin
+                     Print_String(TokenName[sy_Equals]);
+                  end;
+            endcases;
+            Print_Definiens(nDefiniens);
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itDefStruct:
+            with StructureDefinitionPtr(nContent)^ do
+         begin
+            Print_String(TokenName[sy_Struct]);
+            if nAncestors^.Count > 0 then
+            begin
+               Print_String('(');
+               Print_Type(nAncestors^.Items^[0]);
+               for i := 1 to nAncestors^.Count - 1 do
+               begin
+                  Print_String(',');
+                  Print_Type(nAncestors^.Items^[i]);
+               end;
+               Print_String(')');
+            end;
+            Print_String(StructureName[nDefStructPattern^.nModeSymbol]);
+            if (nDefStructPattern^.nArgs <> nil) and (nDefStructPattern^.nArgs^.Count > 0) then
+            begin
+               Print_String(TokenName[sy_Over]);
+               Print_Loci(nDefStructPattern^.nArgs);
+            end;
+            Print_String(TokenName[sy_StructLeftBracket]);
+            for i := 0 to nSgmFields^.Count - 1 do
+               with FieldSegmentPtr(nSgmFields^.Items^[i])^ do
+            begin
+               Print_String(SelectorName[FieldSymbolPtr(nFields^.Items^[0])^.nFieldSymbol]);
+               for j := 1 to nFields^.Count - 1 do
+                  with FieldSymbolPtr(nFields^.Items^[j])^ do
+               begin
+                  Print_String(',');
+                  Print_String(SelectorName[nFieldSymbol]);
+               end;
+               Print_String(TokenName[sy_Arrow]);
+               Print_Type(nSpecification);
+               if (i >= 0) and (i < nSgmFields^.Count-1) then
+                  Print_String(',');
+            end;
+            Print_String(TokenName[sy_StructRightBracket]);
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itPredSynonym,
+         itFuncNotation, itModeNotation,
+         itAttrSynonym:
+            with NotationDeclarationPtr(nContent)^ do
+         begin
+            Print_String(TokenName[sy_Synonym]);
+            Print_Pattern(nNewPattern);
+            Print_String(TokenName[sy_For]);
+            Print_Pattern(nOriginPattern);
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itPredAntonym,itAttrAntonym:
+            with NotationDeclarationPtr(nContent)^ do
+         begin
+            Print_String(TokenName[sy_Antonym]);
+            Print_Pattern(nNewPattern);
+            Print_String(TokenName[sy_For]);
+            Print_Pattern(nOriginPattern);
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itCluster:
+            begin
+               Print_String(TokenName[sy_Cluster]);
+               case ClusterPtr(nContent)^.nClusterKind of
+                  ExistentialRegistration:
+                     with EClusterPtr(nContent)^ do
+                  begin
+                     Print_AdjectiveList(nConsequent);
+                     Print_String(TokenName[sy_For]);
+                     Print_Type(nClusterType);
+                  end;
+                  ConditionalRegistration:
+                     with CClusterPtr(nContent)^ do
+                  begin
+                     Print_AdjectiveList(nAntecedent);
+                     Print_String(TokenName[sy_Arrow]);
+                     Print_AdjectiveList(nConsequent);
+                     Print_String(TokenName[sy_For]);
+                     Print_Type(nClusterType);
+                  end;
+                  FunctorialRegistration:
+                     with FClusterPtr(nContent)^ do
+                  begin
+                     Print_Term(nClusterTerm);
+                     Print_String(TokenName[sy_Arrow]);
+                     Print_AdjectiveList(nConsequent);
+                     if nClusterType <> nil then
+                     begin
+                        Print_String(TokenName[sy_For]);
+                        Print_Type(nClusterType);
+                     end;
+                  end;
+               endcases;
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itIdentify:
+            with IdentifyRegistrationPtr(nContent)^ do
+         begin
+            Print_String(TokenName[sy_Identify]);
+            Print_Pattern(nNewPattern);
+            Print_String(TokenName[sy_With]);
+            Print_Pattern(nOriginPattern);
+            if (nEqLociList <> nil) and (nEqLociList^.Count > 0) then
+            begin
+               Print_String(TokenName[sy_When]);
+               for i := 0 to nEqLociList^.Count - 1 do
+                  with LociEqualityPtr(nEqLociList^.Items^[i])^ do
+               begin
+                  Print_Locus(nLeftLocus);
+                  Print_String('=');
+                  Print_Locus(nRightLocus);
+                  if (i >= 0) and (i < nEqLociList^.Count-1) then
+                     Print_String(',');
+               end;
+            end;
+            Print_String(';');
+            Print_NewLine;
+         end;
+         itPropertyRegistration:
+            case PropertyRegistrationPtr(nContent)^.nPropertySort of
+               sySethood:
+                  with SethoodRegistrationPtr(nContent)^ do
+               begin
+                  Print_String(PropertyName[nPropertySort]);
+                  Print_String(TokenName[sy_Of]);
+                  Print_Type(nSethoodType);
+                  Print_Justification(nJustification,nBlock);
+                  Print_String(';');
+                  Print_NewLine;
+               end;
+            endcases;
+         itReduction:
+            begin
+               with ReduceRegistrationPtr(nContent)^ do
+               begin
+                  Print_String(TokenName[sy_Reduce]);
+                  Print_Term(nOriginTerm);
+                  Print_String(TokenName[sy_To]);
+                  Print_Term(nNewTerm);
+               end;
+               Print_String(';');
+               Print_NewLine;
+            end;
+         itPragma:
+            begin
+               Print_NewLine;
+               Print_String('::'+PragmaPtr(nContent)^.nPragmaStr);
+               Print_NewLine;
+            end;
+         itIncorrItem:;
+      end;
+   endcases;
+end;
+@
+
+@<Implementation for \texttt{wsmarticle.pas}@>=
+procedure Print_WSMizArticle(aWSTextProper:wsTextProperPtr; aFileName:string);
+var lWSMizOutput: WSMizarPrinterPtr;
+begin
+   InitScannerNames;
+   lWSMizOutput:=new(WSMizarPrinterPtr,OpenFile(aFileName));
+   lWSMizOutput^.Print_TextProper(aWSTextProper);
+   dispose(lWSMizOutput,Done);
+end;
+
+
+
+
+
+@* Index.
