@@ -3,11 +3,18 @@ system.
 
 # Build the documentation
 
-To the PDF it using the "modern" WEB macros using PDF links,
-just run `make` in this directory.
+**tl;dr**
+To build the PDF, simply do the following:
 
-To build it using the "classic" WEB macros, run `make classic` to
-build the PDF and `make dvi` to build the DVI file.
+```
+~/Mizar-system/lit$ cd img
+~/Mizar-system/lit/img$ make
+...
+~/Mizar-system/lit/img$ cd ..
+~/Mizar-system/lit$ make
+```
+
+This will produce a 398 page PDF.
 
 # Plans
 

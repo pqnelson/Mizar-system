@@ -12,10 +12,17 @@
 %%   \def\?##1]{\hbox to 1in{\hfil##1.\}}
 %% }
 
+\newif\ifpdf 
+\ifx\pdfmajorversion\undefined \pdffalse \else \pdftrue \fi
+
 \font\ninett=cmtt9
 \font\eighttt=cmtt8
+
 \input{epsf}
 \input graphicx.tex %
+
+\def\graphics#1{\ifpdf\includegraphics{#1.pdf}\else\epsfbox{#1.eps}\fi}
+
 \def\Ithink{} % for my unconfirmed suspicions, to make it easier to
               % edit them out
 \def\hex{\hbox{$^{\scriptscriptstyle\#}$\tt\aftergroup}} % CWEB style
@@ -37,7 +44,9 @@
 \def\caption#1{\rightline{\vbox{\vskip-3pc\hbox{\eightrm{\eightbf Fig.~\the\fig.}
 #1}}}}
 
-% XML schema
+%%%
+%%% XML schema
+%%%
 \def\schema{\obeylines\parindent=0pt\tt\frenchspacing}
 
 % some common attributes
@@ -55,8 +64,10 @@
 \def\interface{\ifunindented\def\1{\oldOne\gdef\1{}}\unindentedfalse\fi}
 \def\endinterface{\unindentedtrue\global\let\1\oldOne\ignorespaces}
 
+%%%
+%%% Symbols
 \def\section{\mathhexbox278} % TeX's \S
-
+\def\pilcrow{\mathhexbox27B}
 %%
 \def\define#1{\textbf{``#1''}}
 
@@ -166,30 +177,42 @@
 \font\eightrm=cmr8
 \let\sc=\eightrm % for smallish caps (NOT a caps-and-small-caps font)
 
+\def\acro#1{{\mc #1\spacefactor1000}} % from tugboat
+
 \def\CAUTION/{C{\sc AUTION}}
 \def\ASCII/{{\mc ASCII\spacefactor1000}}
-\def\CEE/{{\mc C\spacefactor1000}}% the C programming language
-\def\FORTRAN/{{\mc FORTRAN\spacefactor1000}}% ditto for the older guy
-\def\ALGOL/{{\mc ALGOL\spacefactor1000}}
-\def\COBOL/{{\mc COBOL\spacefactor1000}}
-\def\MIX{{\tt MIX\spacefactor1000}}
-\def\MMIX{{\tt MMIX\spacefactor1000}}
-\def\PASCAL/{{\mc PASCAL\spacefactor1000}}
+
+% Operating systems
+\def\BeOS/{{\mc B}e\acro{OS}}
+\def\BSD/{{\mc BSD\spacefactor1000}}
+\def\GNU/{\acro{GNU}}
+\def\macOS/{mac\acro{OS}} % tugboat.cmn
+\def\MacOSX/{Mac\,\acro{OS\,X}} % tugboat.cmn
+\def\SOLARIS/{S{\sc OLARIS\spacefactor1000}}
 \def\UNIX/{{\mc U\kern-.05emNIX\spacefactor1000}}
+\def\VAX{V\kern-.12em A\kern-.1em X\spacefactor1000} % tugboat.cmn
+
+% Programming languages
+\def\CEE/{{\mc C\spacefactor1000}} % cwebmac, the C programming language
+\def\FORTRAN/{{\mc FORTRAN\spacefactor1000}}% taocpmac, ditto for the older guy
+\def\ALGOL/{{\mc ALGOL\spacefactor1000}} % taocpmac
+\def\COBOL/{{\mc COBOL\spacefactor1000}} % taocpmac
+\def\MIX{{\tt MIX\spacefactor1000}} % taocpmac
+\def\MMIX{{\tt MMIX\spacefactor1000}} % taocpmac
+\def\PASCAL/{{\mc PASCAL\spacefactor1000}}
 \def\TEX/{\TeX}
-\def\CPLUSPLUS/{{\mc C\PP\spacefactor1000}}
+\def\CPLUSPLUS/{{\mc C\PP\spacefactor1000}} % cwebmac
 \def\Cee{\CEE/} % for backward compatibility
 \def\Cpp{\CPLUSPLUS/} % for backward compatibility
-\newbox\PPbox % symbol for ++
-\setbox\PPbox=\hbox{\kern.5pt\raise1pt\hbox{\sevenrm+\kern-1pt+}\kern.5pt}
-\def\PP{\copy\PPbox}
+\newbox\PPbox % cwebmac, symbol for ++
+\setbox\PPbox=\hbox{\kern.5pt\raise1pt\hbox{\sevenrm+\kern-1pt+}\kern.5pt} % cwebmac
+\def\PP{\copy\PPbox} % cwebmac
 % https://tex.stackexchange.com/q/44528/14751
 % Also of note: https://tex.stackexchange.com/q/132846/14751
 \def\CEESHARP/{{\mc C\#\spacefactor1000}}%{${\mc C}^{\sharp}$\spacefactor1000}
 \def\CSHARP/{\CEESHARP/}
 
 % From tugboat.sty
-\def\acro#1{{\mc #1\spacefactor1000}}
 \def\ASCII/{\acro{ASCII}}%{\mc ASCII\spacefactor1000}}
 \def\PDF/{\acro{PDF}}
 \def\SQL/{{\mc SQL\spacefactor1000}}
@@ -203,7 +226,9 @@
 % \boxit from TeXbook exercise 21.3
 % \setbox4=\vbox{\hsize 23pc\noindent\strut blah blah blah\strut}
 % $$ \boxit{\box4} $$
-\def\boxit#1{\leavevmode\hbox to0pt{\vbox to0pt{\hrule\hbox{\vrule\kern3pt%
+%% \def\boxit#1{\leavevmode\hbox to0pt{\vbox to0pt{\hrule\hbox{\vrule\kern3pt%
+%%   \vbox{\kern3pt#1\kern3pt}\kern3pt\vrule}\hrule}}}
+\def\boxblock#1{\hbox{\vbox{\hrule\hbox{\vrule\kern3pt%
   \vbox{\kern3pt#1\kern3pt}\kern3pt\vrule}\hrule}}}
   
 \def\boxit#1#2#3#4{\leavevmode
@@ -304,5 +329,35 @@
 
 % indexing hack?
 \def\9#1{}
+
+%%%
+%%% Table of contents hack
+%%%
+
+\newif\ifcontents\contentsfalse
+\newcount\chapno\chapno=0
+\newcount\secno\secno=0
+\newcount\subsecno\subsecno=0
+\def\refstepchapter{\global\secno=0%
+  \global\subsecno=0%
+  \global\advance\chapno by1}
+\def\refstepsec{\global\subsecno=0%
+  \global\advance\secno by1}
+\def\refstepsubsec{\global\advance\subsecno by1}
+\def\chapter#1{\ifcontents\llap{{\bf\the\chapno}\quad}\refstepchapter\fi\ignorespaces}
+
+\def\secn#1{\ifcontents\refstepsec\hbox to2em{\the\secno{.}\hss}\else$\vdash$\ \fi\ignorespaces}
+\def\subsection#1{\ifcontents\refstepsubsec\hbox to4em{\qquad\the\subsecno{.}\hss}%
+\else$\vdash\vdash$\ \fi\ignorespaces}
+
+\def\contentsline#1#2#3#4{\contentstrue%
+    \line{\ignorespaces#1
+      \rm\leaders\hbox to .5em{.\hfil}\hfil
+      \ \ifhint
+          \HINTlink{#2}% No page numbers in HINT
+          \HINTcontents{#1}{#2}%
+        \else\ifpdf\pdflink{#2}\else#2\fi
+          \hbox to3em{\hss#3}\fi}}
+
 
 \endinput

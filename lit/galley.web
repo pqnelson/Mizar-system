@@ -2,6 +2,10 @@
 \input macros
 \def\title{Galley Proof}
 
+
+\secno=11
+\chapno=22
+
 @ The Mizar program is released under the GNU license. So let us place
 this license in one place.
 
@@ -41,26 +45,15 @@ this license in one place.
 expects the \XML/-stylesheet located at \texttt{"file://'+\$MIZFILES+'/wsmiz.xml"},
 but that file is not present in Mizar.
 
-
-@ \node{Writing out to an XML file.}
-
-@p
-procedure Write_WSMizArticle(aWSTextProper:wsTextProperPtr; aFileName:string);
-var lWSMizOutput: OutWSMizFilePtr;
-begin
-   InitScannerNames;
-   lWSMizOutput:=new(OutWSMizFilePtr,OpenFile(aFileName));
-   lWSMizOutput^.nMizarAppearance:=true;
-   lWSMizOutput^.Out_TextProper(aWSTextProper);
-   dispose(lWSMizOutput,Done);
-end;
-
-
-@* Reading WSM files.
+@* \secn{} Reading WSM files.
 Reading a WSM file amounts to reading an \XML/ file, which means that
 the \\{XMLInStream} class (\section\xref{XMLInStreamObj}) is a natural
 parent class. Recall, the state of the \\{XMLInStream} contains the
-current start tag and a dictionary for the attributes and their values.
+current start tag and a dictionary for the attributes and their
+values.
+
+The code is a ``mirror image'' to writing \XML/ files, and the \XML/
+schema guides the implementation.
 
 @<Publicly declared types in \texttt{wsmarticle.pas}@>=
    InWSMizFilePtr = ^InWSMizFileObj; @/
@@ -329,7 +322,7 @@ begin
       Str2CorrectnessKind:= CorrectnessKind( lNr)
 end;
 
-@* $\vdash$ Parsing types.
+@* \subsection{} Parsing types.
 Reading a ``term list'' just iteratively invokes \\{Read\_Term}
 (\section\xref{InWSMizFileObj.Read_Term}) until all the children have
 been read.
@@ -426,7 +419,7 @@ begin
    end
 end;
 
-@* $\vdash$ Parsing formulas.
+@* \subsection{} Parsing formulas.
 Parsing a variable from \XML/ just requires reading the attributes,
 since it is an empty-element.
 
@@ -668,7 +661,7 @@ end;
             Result:=Read_PrivatePredicativeFormula;
          end
 
-@* $\vdash$ Parsing terms.
+@* \subsection{} Parsing terms.
 
 @<Implementation for \texttt{wsmarticle.pas}@>=
 function InWSMizFileObj.Read_SimpleTerm: SimpleTermPtr;
@@ -868,7 +861,7 @@ begin
    endcases;
 end;
 
-@* $\vdash$ Parsing text items.
+@* \subsection{} Parsing text items.
 
 @<Implementation for \texttt{wsmarticle.pas}@>=
 function InWSMizFileObj.Read_TypeList: PList;
@@ -1811,7 +1804,7 @@ end;
 
 
 
-@* Prettyprinting WSM files.
+@* \secn{} Prettyprinting WSM files.
 
 @<Publicly declared types in \texttt{wsmarticle.pas}@>=
 WSMizarPrinterPtr =  ^WSMizarPrinterObj; @/

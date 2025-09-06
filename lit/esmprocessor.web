@@ -28,7 +28,7 @@
 
 \def\title{Even More Strict Mizar Processor}
 
-@* Introduction.
+@* \chapter{} Introduction.
 We are trying to understand Mizar. So I am transcribing the source
 code into a literate program, following the order of
 compilation. Perhaps this ``goes against the spirit'' of literate
@@ -41,7 +41,7 @@ reference) each ``section'' appearing in the table of contents
 corresponds to a different file.
 
 @ \node{Subsections demarcated by turnstiles.}
-We will have ``subsections'' demarcated with ``$\vdash$''. This makes
+We will have ``subsections'' demarcated with ``\secn{}''. This makes
 it easier to scan the table of contents for different
 ``sections''. Every section without a turnstile refers to a different
 source code file.
@@ -134,10 +134,16 @@ source code when we invoke \TANGLE/.
 
 @d if_def(#) == @{@&$IFDEF #@}
 @d if_not_def(#) == @{@&$IFNDEF #@}
+@d else_if_def(#) == @{@&$ELSEIF DEFINED(#)@}
+@d else_def == @{@&$ELSE@}
 @d endif == @{@&$ENDIF@}
-@f if_def == begin
-@f if_not_def == begin
+@d end_if == endif
+@f if_def == if
+@f if_not_def == if
+@f else_if_def == else
+@f else_def == else
 @f endif == end
+@f end_if == end
 
 @ \node{Toggling IO Checking.} Another compiler directive enables and
 disables IO checking
@@ -273,12 +279,9 @@ different index entries.
 \item [Cosmetics] Check the typography is correct for the code
 \item [Cosmetics] Create more \WEB/ macros for conditional compilation
 \item [Cosmetics] Would it help to include more UML class diagrams?
-\item [I'm lost?] Where do tokens get their kind? It seems to be some
-time before \\{ReadToken} (\section\xref{ReadToken}), but reserved
-words do not seem to be recognized as tokens.
 \endenumerate
 
-@* Mizar's workflow.
+@* \chapter{} Mizar's workflow.
 This second ``chapter'' will give a brief overview of what Mizar
 ``does'' when we run it. The analogy to bear in mind is with a batch
 compiler: there's parsing, some intermediate steps, then emits some
@@ -306,12 +309,17 @@ $1/15$ of its time here.
 
 @ \node{Accommodator.}
 This will produce, among other outputs, the ``\texttt{.dct}'' file
-(and its \XML/ counterpart, the ``\texttt{.dcx}'' file).
+(and its \XML/ counterpart, the ``\texttt{.dcx}'' file). The
+``\texttt{.dct}'' file contains all the identifiers imported from
+other articles and reserved keywords for Mizar. The Tokeniser needs it
+to properly tokenise an article.
 
 @ \node{Parsing phase.}
 We can look at \texttt{kernel/verfinit.pas} to find the parsing phase
 of the Mizar program is handled by the following lines of code:
+\medbreak
 
+\setbox0=\vbox{
 \Y\P$\\{InitPass}(\.{\'Parser\ \ \'})$;\5
 $\\{FileExam}(\\{EnvFileName}+\.{\'.dct\'})$;\5
 $\\{InitScanning}(\\{MizFileName}+\\{ArticleExt},\39\\{EnvFileName})$;\5
@@ -321,7 +329,11 @@ $\\{gFormatsColl}.\\{StoreFormats}(\\{EnvFileName}+\.{\'.frx\'})$;\5
 \\{gFormatsColl}.\\{Done};\5
 \\{FinishScanning};\5
 $\\{Write\_WSMizArticle}(\\{gWSTextProper},\39\\{EnvFileName}+\.{\'.wsx\'})$;%
-\par\medbreak\noindent%
+\par}
+
+\boxblock{\box0}
+
+\medbreak\noindent%
 Our goal is to examine these functions, and understand what is going on.
 We know \\{Parse} is defined in \texttt{base/parse.pas}, for example,
 and \\{Write\_WSMizArticle} is defined in \texttt{base/wsmarticle.pas}.
@@ -332,7 +344,7 @@ This phase will be responsible for generating a ``\texttt{.frx}''
 (formats \XML/) and a ``\texttt{.wsx}'' (weakly strict Mizar \XML/) file.
 
 
-@* Mizar environment.
+@* \chapter{} Mizar environment.
 We will need some basic library of functions. For example, trimming
 whitespace from a String.
 
@@ -393,15 +405,15 @@ begin
   else
     for I := 1 to aLength - L do aString := aString + ' ';
 end;
+
 @ We have publicly available functions trimming whitespace from functions.
 
-\interface
 @<interface for mizenv.pas@>=
-function @? TrimStringLeft(aString: String): String;
-function @? TrimStringRight(aString: String): String;
+function @? TrimStringLeft(aString: String): String; @t\2@>
+function @? TrimStringRight(aString: String): String; @t\2@>
 function @? TrimString(const aString: String): String;
-@ \endinterface
-Trimming the left String will repeatedly delete any leading
+
+@ Trimming the left String will repeatedly delete any leading
 whitespace, until the String is empty or has no leading whitespace.
 
 Similarly, trimming the right String will repeatedly delete the \textit{last}
@@ -419,23 +431,25 @@ begin
   while (length(aString) > 0) and (aString[length(aString)] = ' ') do Delete(aString, length(aString), 1);
   TrimStringRight := aString;
 end;
+
 @ Trimming a String amounts to trimming it on the left and right.
+
 @p
 function TrimString(const aString: String): String;
 begin
   TrimString := TrimStringRight(TrimStringLeft(aString));
 end;
+
 @ We have a few more String manipulation functions for changing case,
 and turning an integer into a String.
 
-\interface
 @<interface for mizenv.pas@>=
-function @? UpperCase(const aStr:String): String;
-function @? MizLoCase(aChar: char): char;
-function @? LowerCase(const aStr: String): String;
+function @? UpperCase(const aStr:String): String; @t\2@>
+function @? MizLoCase(aChar: char): char; @t\2@>
+function @? LowerCase(const aStr: String): String; @t\2@>
 function @? IntToStr(aInt: integer): String;
-@ \endinterface
-Now, uppercase letters.
+
+@ Now, uppercase letters.
 
 @<implementation of mizenv.pas@>=
 function UpperCase(const aStr:String): String;
@@ -823,7 +837,7 @@ begin
 end;
 
 
-@* Mizar Console.
+@* \chapter{} Mizar Console.
 The Mizar Console unit is used for interacting with the command line.
 
 @<mconsole.pas@>=
@@ -864,22 +878,20 @@ some specific variables for the state of the analyzer, etc.
 @<Interface for transfer-specific command line options@>@;
 
 @<Interface for other command line options@>
-@
 
-\interface
-@<Report results to command line@>=
-procedure @? InitDisplayLine(const aComment:String);
-procedure @? NoDisplayLine(fLine,fErrNbr: integer); @#
+@ @<Report results to command line@>= 
+procedure @? InitDisplayLine(const aComment:String); @t\2@>
+procedure @? NoDisplayLine(fLine,fErrNbr: integer); @t\2@> @#
 
-const@+DisplayLine:@+procedure(fLine,fErrNbr: integer) = NoDisplayLine; @#
+const@+DisplayLine:@+procedure(fLine,fErrNbr: integer) = NoDisplayLine; @t\2@> @#
 
-procedure @? DrawMizarScreen(const aApplicationName:String);
-procedure @? DrawArticleName(const fName:String); @#
+procedure @? DrawMizarScreen(const aApplicationName:String); @t\2@>
+procedure @? DrawArticleName(const fName:String); @t\2@> @#
 
-procedure @? DrawStr(const aStr:String);
+procedure @? DrawStr(const aStr:String); @t\2@>
 procedure @? FinishDrawing;
-@ \endinterface
-Common routines for ``drawing'' output to the console.
+
+@ Common routines for ``drawing'' output to the console.
 
 \interface
 @<Report results to command line@>=
@@ -910,7 +922,6 @@ const
        );
 @ Now, we have accommodator specific options.
 
-\interface
 @<Interface for accommodator command line options@>=
 {Accommodator specific options:}
 
@@ -923,28 +934,24 @@ var
  DefinitionsProcessing,EqualitiesProcessing,ExpansionsProcessing,
  TheoremsProcessing,SchemesProcessing,TheoremListsProcessing,SchemeListsProcessing:boolean;
 
-procedure @? InitAccOptions;
+procedure @? InitAccOptions; @t\2@>
 procedure @? GetAccOptions;
-@ \endinterface
-
-@<Interface for |MakeEnv| command line options@>=
+@ @<Interface for |MakeEnv| command line options@>=
 {MakeEnv specific options:}
 
 var Accomodation : boolean = false;
     NewAccom : boolean = false;
 
 procedure @? GetMEOptions;
-@
 
-@<Interface for transfer-specific command line options@>=
+@ @<Interface for transfer-specific command line options@>=
 {Transfer specific options:}
 
 var PublicLibr: boolean;
 
 procedure @? GetTransfOptions;
-@
 
-@<Interface for other command line options@>=
+@ @<Interface for other command line options@>=
 {Other options:}
 
 var
@@ -1188,11 +1195,11 @@ begin
  WriteLn(Copyright);
 end;
 @#
-procedure Noise;
+procedure Noise; @t\2@>
 begin @|@/
- @{@&$IFNDEF WIN32@}
- write(^G^G^G);@/
- @{@&$ENDIF@}
+  if_not_def(WIN32)
+  write(^G^G^G);
+  endif;
 end;
 @#
 procedure EmptyParameterList;
@@ -1226,9 +1233,8 @@ begin
  WriteLn;
  WriteLn('Time of mizaring:',aTime);
 end;
-@
 
-@p
+@ @p
 procedure DisplayLineInCurPos(fLine,fErrNbr: integer);
 begin
  if (not CtrlCPressed) and (not QuietMode)then
@@ -1283,9 +1289,7 @@ begin
  halt(1);
 end;
 
-@
-
-@p
+@ @p
 procedure DrawErrorsMSg(aErrorNbr: integer);
 begin
   if aErrorNbr > 0 then
@@ -1298,7 +1302,7 @@ begin
   end;
 end;
 
-@* PC Mizar Version.
+@* \chapter{} PC Mizar Version.
 This is used to track the version of Mizar.
 
 @<pcmizver.pas@>=
@@ -1340,9 +1344,8 @@ begin
  Str(CurrentYear,s);
  Copyright:='Copyright (c) 1990-'+s+' Association of Mizar Users';
 end;
-@
 
-@p
+@ @p
 function  VersionStr: String;
  var lRel,lVer,lVar: String[2]; lStr:String;
 begin
@@ -1354,42 +1357,36 @@ begin
  lStr:='-alpha'; @/
 @{@&$ELSE@}
  lStr:=''; @/
-@{@&$ENDIF@}
+@{@&$ENDIF@} @/
  VersionStr:=lRel+'.'+lVer+'.'+lVar+lStr;
 end;
 
 @ There are a number of platforms supported, a surprisingly large
-number. If we were to support more platforms (other BSDs, BeOS, GNU
+number. If we were to support more platforms (other \BSD/s, \BeOS/, \GNU/
 Hurd, etc.), then we would need to update this function. To see what
 platforms are predefined for FreePascal, consult:
 \item{$\bullet$}\href{https://wiki.freepascal.org/Platform_defines}{\texttt{https://wiki.freepascal.org/Platform_defines}}
 
+\noindent Ostensibly, we could extend the platform name string to
+display ``generic \UNIX/'' (and even ``generic \BSD/''), as well as
+``generic Windows''.
+
 @p
 function  PlatformNameStr: String;
- var lStr: String;
-begin lStr:=''; @/
-@{@&$IFDEF WIN32@}
- lStr:=lStr+'Win32';
-@{@&$ENDIF@} @/
-@{@&$IFDEF LINUX@}
- lStr:=lStr+'Linux';
- @{@&$ENDIF@} @/
-@{@&$IFDEF SOLARIS@}
- lStr:=lStr+'Solaris'; 
-@{@&$ENDIF@} @/
-@{@&$IFDEF FREEBSD@}
- lStr:=lStr+'FreeBSD'; 
-@{@&$ENDIF@} @/
-@{@&$IFDEF DARWIN@}
- lStr:=lStr+'Darwin'; 
-@{@&$ENDIF@} @/
-@{@&$IFDEF FPC@}
- lStr:=lStr+'/FPC'; 
-@{@&$ENDIF@} @/
-@{@&$IFDEF DELPHI@}
- lStr:=lStr+'/Delphi'; 
-@{@&$ENDIF@} @/
- PlatformNameStr:=lStr;
+var lStr: String;
+begin
+   lStr:=''; @#
+   
+   if_def(WIN32) lStr:=lStr+'Win32'; @+ end_if
+   if_def(LINUX) lStr:=lStr+'Linux'; @+ end_if
+   if_def(SOLARIS) lStr:=lStr+'Solaris'; @+ end_if
+   if_def(FREEBSD) lStr:=lStr+'FreeBSD'; @+ end_if
+   if_def(DARWIN) lStr:=lStr+'Darwin'; @+ end_if @#
+
+   if_def(FPC) lStr:=lStr+'/FPC'; @+ end_if
+   if_def(DELPHI) lStr:=lStr+'/Delphi'; @+ end_if @#
+
+   PlatformNameStr:=lStr;
 end;
 
 @ The last function in the \texttt{pcmizver.pas} file provides a
@@ -1404,7 +1401,7 @@ end;
 
 end.
 
-@* Mizar internal state.
+@* \chapter{} Mizar internal state.
 As far as \emph{processing} an article, Mizar works like a ``batch compiler''
 and works in multiple ``passes''.
 
@@ -1429,18 +1426,14 @@ var PassTime: longint; @|@/
 @t\2@>
 end
 
-@
-
-\interface
-@<Interface for \texttt{mstate.pas}@>=
-procedure @? InitPass(const aPassName: String);
-procedure @? FinishPass;
-procedure @? InitProcessing(const aProgName,aExt: String);
+@ @<Interface for \texttt{mstate.pas}@>=
+procedure @? InitPass(const aPassName: String); @t\2@>
+procedure @? FinishPass; @t\2@>
+procedure @? InitProcessing(const aProgName,aExt: String); @t\2@>
 procedure @? ProcessingEnding;
-@ \endinterface
-The implementation amounts to, well, these four functions. We have a
-couple ``private'' functions to help us: |MError| and |MizarExitProc|.
 
+@ The implementation amounts to, well, these four functions. We have a
+couple ``private'' functions to help us: |MError| and |MizarExitProc|.
 
 @<Implementation for \texttt{mstate.pas}@>=
 procedure InitPass(const aPassName: String);
@@ -1479,9 +1472,8 @@ begin
 {Halt(ErrorCode);}
  enable_io_checking;
 end;
-@
 
-@p
+@ @p
 procedure InitProcessing(const aProgName,aExt: String);
 begin
   DrawMizarScreen(aProgName);
@@ -1512,7 +1504,7 @@ begin
   end;
 end;
 
-@* Monitor.
+@* \chapter{} Monitor.
 
 @<monitor.pas@>=
   @<GNU License@>
@@ -1594,9 +1586,7 @@ begin
   if (ErrorCode = 0) and (ErrorNbr <> 0) then Halt(1) else Halt(ErrorCode);
 end;
 
-@
-
-@<Handle runtime error cases for \texttt{monitor.pas}@>=
+@ @<Handle runtime error cases for \texttt{monitor.pas}@>=
 case RTErrorCode of
   800,804:  DrawMessage('Library Corrupted','');
   857:      DrawMessage('Connection Fault','');
@@ -1642,9 +1632,7 @@ begin
    InitCtrl;
 end.
 
-@ 
-
-@<Non-windows FreePascal implemenation for |InitCtrl|@>=
+@ @<Non-windows FreePascal implemenation for |InitCtrl|@>=
 @{@&$IFDEF FPC@}
 @t\quad @> @{@&$IFNDEF WIN32@}
 procedure CatchSignal(aSig : integer);cdecl;
@@ -1691,9 +1679,8 @@ procedure InitCtrl;
 begin
  SetConsoleCtrlHandler(CtrlSignal, TRUE); @+
 end;
-@
 
-@<Delphi implementation of |InitCtrl| for Windows@>=
+@ @<Delphi implementation of |InitCtrl| for Windows@>=
 procedure InitCtrl;
 var
   ConsoleMode,lConsoleMode: DWORD;
@@ -1723,21 +1710,18 @@ begin
   {ExitProcess(1);}
 end;
 
-@
-
-@<FreePascal declaration of |CtrlSignal| for Windows@>=
+@ @<FreePascal declaration of |CtrlSignal| for Windows@>=
 @{@&$IFDEF FPC@}
 function CtrlSignal(aSignal: DWORD): WINBOOL ;stdcall; @/
 @{@&$ENDIF@}
-@
 
-@<Delphi declaration of |CtrlSignal| for Windows@>=
+@ @<Delphi declaration of |CtrlSignal| for Windows@>=
 @{@&$IFDEF DELPHI@} 
 function CtrlSignal(aSignal: DWORD): BOOL; cdecl; @/
 @t\hskip-1em @>  @{@&$ENDIF@}
 
 
-@* Error handling.
+@* \chapter{} Error handling.
 
 @<errhan.pas@>=
   @<GNU License@>
@@ -1938,7 +1922,7 @@ begin
  RunError(99);
 end;
 
-@* Time utilities.
+@* \chapter{} Time utilities.
 This is another heavily ``system dependent'' library.
 
 @<mtime.pas@>=
@@ -1956,15 +1940,13 @@ implementation @; @|@/
 
 end;
 
-@
-\interface
-@<Interface for \texttt{mtime.pas}@>=
-procedure @? TimeMark(var W:longint);
-function @? ElapsedTime(W:longint): longint;
-procedure @? MUnpackTime(W:longint; var H,M,S,F: word);
+@ @<Interface for \texttt{mtime.pas}@>=
+procedure @? TimeMark(var W:longint);  @t\2@>
+function @? ElapsedTime(W:longint): longint; @t\2@>
+procedure @? MUnpackTime(W:longint; var H,M,S,F: word); @t\2@>
 function @? ReportTime(W:longint): String;
-@ \endinterface
-We also have one global variable tracking the start time.
+
+@ We also have one global variable tracking the start time.
 
 @p
 var
@@ -2012,7 +1994,8 @@ begin
                       fTime.wSecond*cmSecs+
                       fTime.wMilliseconds;
 end;
-@
+
+@ We ``start the clock''.
 
 @p
 procedure TimeMark(var W:longint);
@@ -2021,7 +2004,8 @@ begin
  GetLocalTime(SystemTime);
  W:=SystemTimeToMiliSec(SystemTime);
 end;
-@
+
+@ We measure the time lapse since we ``started the clock''.
 
 @p
 function ElapsedTime(W:longint): longint;
@@ -2082,7 +2066,7 @@ begin
  TimeMark(gStartTime);
 end.
 
-@* Arbitrary precision arithmetic.
+@* \chapter{} Arbitrary precision arithmetic.
 Specifically, arbitrary precision arithmetic on \emph{integers}
 and \emph{rational complex} numbers. integers are represented as
 Strings of digits.
@@ -2136,22 +2120,21 @@ uses mizenv @/
 @<Arbitrary-precision rational arithmetic@>@;
 
 @<Complex-rational arbitrary-precision arithmetic@>@;
-@
-\interface
-@<Basic arithmetic operations declarations@>=
-function @? Add(a,b: String): String;
-function @? Sub(a,b: String): String;
-function @? Mul(a,b: String): String;
-function @? Diva(a,b: String): String; {*Note: divides absolute values and preserves the sign of the division}
-function @? _Div(a,b: String): String;
-function @? _Mod(a,b: String): String;
-function @? GCD(a,b: String): String; {*Note: always returns a positive value}
-function @? LCM(a,b: String): String; {*Note: always returns a positive value}
-function @? Abs(a :String ): String;
-function @? IsPrime(a: String): boolean;
+
+@ @<Basic arithmetic operations declarations@>=
+function @? Add(a,b: String): String; @t\2@>
+function @? Sub(a,b: String): String; @t\2@>
+function @? Mul(a,b: String): String; @t\2@>
+function @? Diva(a,b: String): String; @t\2@> {*Note: divides absolute values and preserves the sign of the division}
+function @? _Div(a,b: String): String; @t\2@>
+function @? _Mod(a,b: String): String; @t\2@>
+function @? GCD(a,b: String): String; @t\2@> {*Note: always returns a positive value}
+function @? LCM(a,b: String): String; @t\2@> {*Note: always returns a positive value}
+function @? Abs(a :String ): String; @t\2@>
+function @? IsPrime(a: String): boolean; @t\2@>
 function @? Divides(a,b: String): boolean;
-@ \endinterface
-Rational numbers are a pair of arbitrary precision integers
+
+@ Rational numbers are a pair of arbitrary precision integers
 (represented as a String).
 
 Rational complex numbers are represented by a pair of rational numbers
@@ -2162,8 +2145,7 @@ type
    Rational = record Num,Den : String end;
    RComplex = record  Re,Im: Rational end;
 
-@
-@<Zero and units for arbitrary-precision@>=
+@ @<Zero and units for arbitrary-precision@>=
 const
    RZero:Rational = (Num:'0'; Den:'1');
    ROne:Rational  = (Num:'1'; Den:'1');
@@ -2171,53 +2153,45 @@ const
    COne: RComplex      = (Re:(Num:'1'; Den:'1'); Im:(Num:'0'; Den:'1'));
    CMinusOne: RComplex = (Re:(Num:'-1'; Den:'1'); Im:(Num:'0'; Den:'1'));
    CImUnit: RComplex   = (Re:(Num:'0'; Den:'1'); Im:(Num:'1'; Den:'1'));
-@
 
-\interface
-@<Rational arithmetic declarations@>=
-procedure @? RationalReduce(var r: Rational);
-function @? RationalAdd(const r1,r2: Rational): Rational;
-function @? RationalSub(const r1,r2: Rational): Rational;
-function @? RationalNeg(const r1: Rational): Rational;
-function @? RationalMult(const r1,r2: Rational): Rational;
-function @? RationalInv(const r: Rational): Rational;
-function @? RationalDiv(const r1,r2: Rational): Rational;
-function @? RationalEq(const r1,r2: Rational): boolean;
-function @? RationalLE(const r1,r2: Rational): boolean;
+@ @<Rational arithmetic declarations@>=
+procedure @? RationalReduce(var r: Rational); @t\2@>
+function @? RationalAdd(const r1,r2: Rational): Rational; @t\2@>
+function @? RationalSub(const r1,r2: Rational): Rational; @t\2@>
+function @? RationalNeg(const r1: Rational): Rational; @t\2@>
+function @? RationalMult(const r1,r2: Rational): Rational; @t\2@>
+function @? RationalInv(const r: Rational): Rational; @t\2@>
+function @? RationalDiv(const r1,r2: Rational): Rational; @t\2@>
+function @? RationalEq(const r1,r2: Rational): boolean; @t\2@>
+function @? RationalLE(const r1,r2: Rational): boolean; @t\2@>
 function @? RationalGT(const r1,r2: Rational): boolean;
-@ \endinterface
 
-\interface
-@<Predicate declarations for arbitrary-precision arithmetic@>=
-function @? IsintegerNumber(const z: RComplex): boolean;
-function @? IsNaturalNumber(const z: RComplex): boolean;
-function @? IsPrimeNumber(const z: RComplex): boolean; @#
+@ @<Predicate declarations for arbitrary-precision arithmetic@>=
+function @? IsintegerNumber(const z: RComplex): boolean; @t\2@>
+function @? IsNaturalNumber(const z: RComplex): boolean; @t\2@>
+function @? IsPrimeNumber(const z: RComplex): boolean; @t\2@> @#
 
-function @? AreEqComplex(const z1,z2: RComplex): boolean;
-function @? IsEqWithInt(const z: RComplex; @t\hskip11.25pc@> n: longint): boolean;
-function @? IsRationalLE(const z1,z2 : RComplex): boolean;
+function @? AreEqComplex(const z1,z2: RComplex): boolean; @t\2@>
+function @? IsEqWithInt(const z: RComplex; @t\hskip11.25pc@> n: longint): boolean; @t\2@>
+function @? IsRationalLE(const z1,z2 : RComplex): boolean; @t\2@>
 function @? IsRationalGT(const z1,z2 : RComplex): boolean;
-@ \endinterface
 
-\interface
-@<Declare public complex-valued arbitrary precision arithmetic@>=
-function @? IntToComplex(x: integer): RComplex;
-function @? ComplexAdd (const z1,z2: RComplex): RComplex;
-function @? ComplexSub(const z1,z2: RComplex): RComplex;
-function @? ComplexNeg (const z: RComplex): RComplex;
-function @? ComplexMult(const z1,z2: RComplex): RComplex;
-function @? ComplexInv(const z: RComplex): RComplex;
-function @? ComplexDiv(const z1,z2: RComplex): RComplex;
+@ @<Declare public complex-valued arbitrary precision arithmetic@>=
+function @? IntToComplex(x: integer): RComplex; @t\2@>
+function @? ComplexAdd (const z1,z2: RComplex): RComplex; @t\2@>
+function @? ComplexSub(const z1,z2: RComplex): RComplex; @t\2@>
+function @? ComplexNeg (const z: RComplex): RComplex; @t\2@>
+function @? ComplexMult(const z1,z2: RComplex): RComplex; @t\2@>
+function @? ComplexInv(const z: RComplex): RComplex; @t\2@>
+function @? ComplexDiv(const z1,z2: RComplex): RComplex; @t\2@>
 function @? ComplexNorm(const z: RComplex): Rational;
-@ \endinterface
 
-\interface
-@<Declare public comparison operators for arbitrary-precision numbers@>=
-function @? CompareInt(X1,X2: Longint): integer;
-function @? CompareIntStr(X1,X2: String): integer;
+@ @<Declare public comparison operators for arbitrary-precision numbers@>=
+function @? CompareInt(X1,X2: Longint): integer; @t\2@>
+function @? CompareIntStr(X1,X2: String): integer; @t\2@>
 function @? CompareComplex(const z1,z2: RComplex): integer;
-@ \endinterface%
-If we are given single character String consisting of zero or the
+
+@ If we are given single character String consisting of zero or the
 empty String, then we are done.
 
 If we are given anything else, we find the first index (from the left)
@@ -2564,9 +2538,7 @@ begin @|@/
       end;
 end;
 
-@
-
-@p
+@ @p
 function _Div(a,b : String):String;
 var z,c,i:integer; s,r,rs : String;b_GPC:boolean; @/
 @<Get the next digit for dividing arbitrary-precision integers@>@;
@@ -2600,9 +2572,7 @@ begin @t\1@> @/
    end; @t\1@>
 end;
 
-@
-
-@<Get the next digit for dividing arbitrary-precision integers@>=
+@ @<Get the next digit for dividing arbitrary-precision integers@>=
 procedure gets;
 var j : integer;
 begin
@@ -3249,7 +3219,7 @@ begin
    CompareComplex:=CompareIntStr(z1.Im.Den,z2.Im.Den);
 end;
 
-@* Mizar Objects and Data Structures.
+@* \chapter{} Mizar Objects and Data Structures.
 This is one of the largest files in Mizar (it clocks in at 6594 lines
 of code). Its interface consists of 552 lines alone (roughly 1/13 of
 the file).
@@ -3370,7 +3340,7 @@ type @/
   @! PWordArray = ^TWordArray; @/
   @! TWordArray = array[0..16383] of word; {$16383=2^{14}-1$}
 
-@* $\vdash$ Base object.
+@* \secn{} Base object.
 Object-oriented \PASCAL/ is a bit crufty (like
 all Object-oriented \ALGOL/-descended languages).
 
@@ -3459,7 +3429,7 @@ begin
    MCopy:=CopyObject; @+
 end;
 
-@* $\vdash$ Mizar String Object. 
+@* \secn{} Mizar String Object. 
 Strings in Mizar amount to a wrapper around the underlying string data type.
 
 \label{MStrObj}
@@ -3485,7 +3455,7 @@ begin
    fStr:=aStr; @+
 end;
 
-@* $\vdash$ Mizar List.
+@* \secn{} Mizar List.
 A \\{MList} is a dynamic array data structure, which represents a list
 using an array. We reserve an array whose length is referred to as
 its \define{Capacity} in the literature.
@@ -3991,7 +3961,7 @@ begin
       Insert(PObject(fOrigin.Items^[i])^.CopyObject);
 end;
 
-@* $\vdash$ Mizar Collection Class.
+@* \secn{} Mizar Collection Class.
 Curiously, the ``Collection'' class extends the ``List'' class, which
 surprises me. This will change the growth rate from $s(n+1)=s(n)+\\{GrowLimit}(s(n))$
 to be
@@ -4221,7 +4191,7 @@ begin
 end;
 
 
-@* $\vdash$ Simple Stacked (Extendible) Lists.
+@* \secn{} Simple Stacked (Extendible) Lists.
 This is used to track newly registered clusters in Mizar.
 
 The basic idea is that we partition the array into the first $N$
@@ -4478,7 +4448,7 @@ begin
    fExtCount := 0;
 end;
 
-@* $\vdash$ Sorted lists.
+@* \secn{} Sorted lists.
 These are used in the equalizer and in the correlator, specifically
 for keeping a collection of identifiers.
 
@@ -4989,7 +4959,7 @@ begin
    Count:=aIndex;
 end;
 
-@* $\vdash$ Sorted extendible lists.
+@* \secn{} Sorted extendible lists.
 We want to handle a sorted (\section\xref{MSortedList:declarations})
 version of extendible lists --- an \\{MSortedExtList}. It's used in
 the correlator for functorial registrations and inferred definition
@@ -5291,7 +5261,7 @@ one-by-one.
 procedure MSortedExtList.AddExtItems;
 begin while fExtCount > 0 do AddExtObject; end;
 
-@* $\vdash$ Sorted list of strings.
+@* \secn{} Sorted list of strings.
 This is used in the kernel to track directives, as well
 as \texttt{makenv} and \texttt{accdict} needs it.
 
@@ -5370,7 +5340,7 @@ begin
 end;
 
 
-@* $\vdash$ Sorted collections.
+@* \secn{} Sorted collections.
 
 @<Public interface for \texttt{mobjects.pas}@>=
 {MSortedCollection object}
@@ -5527,7 +5497,7 @@ begin
    CompareIntPairs := lRes;
 end;
 
-@* $\vdash$ String collection.
+@* \secn{} String collection.
 
 @<Public interface for \texttt{mobjects.pas}@>=
 {MStringCollection object}
@@ -5585,7 +5555,7 @@ begin
    DisposeStr(Item);
 end;
 
-@* $\vdash$ Int collections.
+@* \secn{} Int collections.
 The |TIntItem| is needed for the unifier and equalizer.
 
 @<Public interface for \texttt{mobjects.pas}@>=
@@ -5690,7 +5660,7 @@ end;
 
 
 
-@* $\vdash$ Stacked list of objects.
+@* \secn{} Stacked list of objects.
 
 \label{StackedObj}
 
@@ -5715,7 +5685,7 @@ begin Abstract1; end; @#
 destructor StackedObj.Done;
 begin Abstract1; end;
 
-@* $\vdash$ String list.
+@* \secn{} String list.
 
 @<Public interface for \texttt{mobjects.pas}@>=
 {MStringList object}
@@ -6363,7 +6333,7 @@ begin
    if P <> nil then FreeMem(P, length(P^) + 1);
 end;
 
-@* $\vdash$ Tuples of integers.
+@* \secn{} Tuples of integers.
 
 @<Public interface for \texttt{mobjects.pas}@>=
 {Partial integers Functions}
@@ -6501,7 +6471,7 @@ begin
    Insert(lIntPair);
 end;
 
-@* $\vdash$ Int rel.
+@* \secn{} Int rel.
 This is used in
 the \texttt{iocorrel.pas}, \texttt{identify.pas}, \texttt{equalizer.pas},
 the analyzer, and a polynomial library.
@@ -6639,16 +6609,15 @@ var I: integer;
 begin
    IsMember:=Search(X,Y, I); @+
 end;
-@
 
-@p
+@ @p
 procedure IntRel.AssignPair(X,Y:integer);
 begin
    if IsMember(X,Y) then exit;
    inherited AssignPair(X,Y);
 end;
 
-@* $\vdash$ Partial integers functions.
+@* \secn{} Partial integers functions.
 
 @<Public interface for \texttt{mobjects.pas}@>=
    NatSetPtr = ^NatSet; @/
@@ -6962,7 +6931,7 @@ begin
    if SearchPair(X, I) then ElemNr:=I;
 end;
 
-@* $\vdash$ Function of natural numbers.
+@* \secn{} Function of natural numbers.
 The |NatFunc| is used in the analyzer, equalizer, unifier,
 and elsewhere. Its destructor is the only place where |nConsistent := false|.
 
@@ -7420,7 +7389,7 @@ begin
    CountAll:=l;
 end;
 
-@* $\vdash$ Sequences of natural numbers.
+@* \secn{} Sequences of natural numbers.
 
 @<Public interface for \texttt{mobjects.pas}@>=   
    NatSeq = object(NatFunc) @t\1@> @/
@@ -7476,7 +7445,7 @@ begin
    IndexOf:=-1;
 end;
 
-@* $\vdash$ Integer sequences.
+@* \secn{} Integer sequences.
 
 @<Public interface for \texttt{mobjects.pas}@>=
    IntegerListPtr = ^IntegerList; @/
@@ -7742,7 +7711,7 @@ begin
    end;
 end;
 
-@* $\vdash$ Integer sets.
+@* \secn{} Integer sets.
 
 @<Public interface for \texttt{mobjects.pas}@>=
    PIntSet = ^IntSet; @/
@@ -7916,7 +7885,7 @@ begin
    Misses:=true;
 end;
 
-@* $\vdash$ Partial Binary integer Functions.
+@* \secn{} Partial Binary integer Functions.
 We want to describe partial functions like $f\colon\ZZ\times\ZZ\pto\ZZ$.
 These are encoded as finite sets of triples
 $\{(x,y,f(x,y))\in\ZZ\times\ZZ\times\ZZ\}$. So we need to introduce
@@ -8219,7 +8188,7 @@ begin
    CountAll:= l;
 end;
 
-@* $\vdash$ Partial integers to Pair of integers Functions.
+@* \secn{} Partial integers to Pair of integers Functions.
 
 @<Public interface for \texttt{mobjects.pas}@>=
    Int2PairOfInt = record X,Y1,Y2: integer; end; @#
@@ -8457,7 +8426,7 @@ end;
    
    var EmptyNatFunc: NatFunc;
 
-@* XML Dictionary.
+@* \chapter{} XML Dictionary.
 We have several types declared in the \texttt{xml\_dict.parse} file.
 These are enumerated types, and string constants for their names.
 
@@ -8666,7 +8635,7 @@ implementation @t\2@> @|@/
 
 end.
 
-@* Environment library.
+@* \chapter{} Environment library.
 We have a library to handle accessing the Mizar mathematical library
 files. This is used in \texttt{makeenv.dpr} and using
 local \texttt{prel/} directories.
@@ -8700,9 +8669,7 @@ begin
    CheckCompatibility; @t\2@>
 end.
 
-@
-
-@<Interface for \.{MIZFILES} library@>=
+@ @<Interface for \.{MIZFILES} library@>=
 const
    MML = 'mml';
    EnvMizFiles = 'MIZFILES';
@@ -9091,7 +9058,7 @@ executable invoked.
    MizFiles:=GetEnvStr(EnvMizFiles);
    if MizFiles='' then MizFiles:=MizPath;
 
-@* Info file handling.
+@* \chapter{} Info file handling.
 I don't think this is actually used anywhere, but I am including it
 for completeness.
 
@@ -9169,7 +9136,7 @@ begin close(InfoFile) end; @#
 end.
 
 
-@* XML Parser.
+@* \chapter{} XML Parser.
 The \XML/ parser module is used for extracting information from XML
 files. It does not ``validate'' the \XML/ (it's assumed to already be
 valid). The scanner chops up the input stream into tokens, then the
@@ -9805,9 +9772,8 @@ state or an ``end'' state.
        NextElementState;
        MizAssert( errElMissing, nState = eStart);
     end;
-@
 
-@p
+@ @p
     procedure XMLParserObj.OpenStartTag;
     begin
        nElName:= nSpelling;
@@ -9853,7 +9819,7 @@ value for an attribute using \\{SetAttributeValue}.
           XMLAttrPtr(Items^[Count-1])^.nValue := aVal;
     end;
 
-@* I/O with XML. %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+@* \chapter{} I/O with XML. %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 We will want to print some \XML/ to a buffer or stream.
 
 Note that \XML/ seems to be frozen at version 1.0 (first published in
@@ -10450,7 +10416,7 @@ begin
    Out_XAttr(fAt, QuoteStrForXML( fVal) );
 end;
 
-@* Vocabulary file dictionaries.
+@* \chapter{} Vocabulary file dictionaries.
 Mizar works with vocabulary files (suffixed with \texttt{.voc})
 for introducing new identifiers.
 
@@ -10529,9 +10495,7 @@ vocabulary file, and a dictionary associating to each article name
    @<Abstract vocabulary object declaration@>; @#
    @<Vocabulary object declaration@>;
 
-@
-
-@<Public function declarations for \texttt{dicthan.pas}@>=
+@ @<Public function declarations for \texttt{dicthan.pas}@>=
    function GetPrivateVoc(const fName:string):PVocabulary; @t\2@>
    function GetPublicVoc(@t\hskip-0.6667em@>@+const fName:string;@+ var fVocFile:text):PVocabulary; @t\2@>@#
    
@@ -11093,7 +11057,7 @@ article.
          VCXfile.Out_XElEnd(XMLElemName[elSymbols])
 
 
-@* Scanner.
+@* \chapter{} Scanner.
 The \texttt{scanner.pas} file contains the \\{MTokeniser} and
 the \\{MScanner}. 
 
@@ -11191,7 +11155,7 @@ begin
    fStr:=aSpelling;
 end;
 
-@* $\vdash$ Collections of tokens.
+@* \secn{} Collections of tokens.
 We can populate a token collection from a dictionary file, or we can
 start with an empty collection. We can save our collection to a
 file. We can also insert (or ``collect'') a new token into the
@@ -11245,7 +11209,20 @@ an empty token collection. Then we iterate through the dictionary,
 reading each line, forming a new token, then inserting it into the
 collection.
 
+The ``\texttt{.dct}'' file contains all the identifiers from articles
+referenced in the \texttt{environ} part of an article, and it will
+always have the first 148 lines be for reserved keywords. The format
+for a ``\texttt{.dct}'' file consists of lines of the form
+
+\centerline{$\langle\textit{kind\/}\rangle\langle\textit{number\/}\rangle$\SP$\langle\textit{name\/}\rangle$}
+
+\noindent The ``kind'' is a single byte, the \emph{number} is an integer
+assigned for the identifier, and \textit{name} is the lexeme (string
+literal) for the identifier. This also has an \XML/ file for this same
+information, the ``\texttt{.dcx}'' file.
+
 @:dct file}{\texttt{.dct} file@>
+@:dcx file}{\texttt{.dcx} file@>
 
 \label{TokensCollection.LoadDct}
 
@@ -11351,7 +11328,7 @@ begin
    lEnvFile.Done;
 end;
 
-@* $\vdash$ Mizar token objects.
+@* \secn{} Mizar token objects.
 This appears to be tokens for a specific file. An MToken extends a
 Token (\section\xref{TokenObj}).
 
@@ -11375,9 +11352,12 @@ waiting to happen\dots
 
 \label{MTokenObj.Init}
 
+% NOTE: the spacing for the function arguments cannot fit on one line
+
 @<Implementation for scanner.pas@>=
-constructor MTokenObj.Init(aKind:char; aNr:integer; const aSpelling:
-string; const aPos: Position);
+constructor MTokenObj.Init(aKind:char; aNr:integer;
+                           const aSpelling: string@t\1@>;
+                           const aPos: Position@t\2@>);
 begin
    fLexem.Kind:=aKind;
    fLexem.Nr:=aNr;
@@ -11390,6 +11370,9 @@ There are four kinds of tokens we want to distinguish:
 all valid tokens are either (1) numerals, or (2) identifiers. Then we
 also have (3) error tokens. But last, we have (4) end of text tokens.
 
+These are for identifying everything which is neither an identifier
+defined in the vocabulary files, nor a reserved keyword.
+
 \label{scanner.pas:implementation:const}
 
 @<Implementation for scanner.pas@>=
@@ -11399,7 +11382,7 @@ const
    ErrorSymbol = '?';
    EOT = '!';
 
-@* $\vdash$ Tokeniser.
+@* \secn{} Tokeniser.
 The first step in lexical analysis is to transform a character stream
 into a token stream. The Tokeniser extends the MToken object
 (\section\xref{MTokenObj}), which in turn extends the Token object
@@ -11643,21 +11626,27 @@ and \\{fPos} be populated. \textbf{Importantly:} The \\{fLexem}'s
 token type is one of the 
 four kinds given in the constant section
 (\section\xref{scanner.pas:implementation:const}): \texttt{Numeral}, \texttt{Identifier}, \texttt{ErrorSymbol},
-or \texttt{EOT}.
+or \texttt{EOT}. What about the ``reserved keywords'' of Mizar? They
+are already present in the ``\texttt{.dct}'' file, which is loaded
+into the \\{fTokens} dictionary. So they will be discovered in step (\section\xref{MTokeniser.SliceIt.reserved-words})
+in this procedure.
 
 \label{MTokeniser.SliceIt}
 
-@<Implementation for scanner.pas@>=
+
+@<Variables for slicing a phrase@>=
+   lCurrChar: integer; {index in \\{fPhrase} for current position}
+   EndOfSymbol: integer;
+   EndOfIdent: integer; {index in \\{fPhrase} for end of identifier}
+   FoundToken : TokenPtr; {most recently found token temporary variable}
+   lPos:Position; {position for debugging purposes}
+
+@ @<Implementation for scanner.pas@>=
 procedure MTokeniser.SliceIt;
 var
-   lCurrChar,EndOfPhrase, lIndex, EndOfSymbol, EndOfIdent, IdentLength,
-   lToken, lFailed, I,J: integer;
-   lNumber: longint;
-   FoundToken, lIdent: TokenPtr;
-   lSpelling: string;
-   lPos:Position;
+   @<Variables for slicing...@>@;
 begin
-   MizAssert(2333,fTokensBuf.Count=0); @/
+   MizAssert(2333,fTokensBuf.Count=0); {Requires: token buffer is empty}
    lCurrChar:=1;
    lPos:=fPhrasePos; @/
    @<Slice pragmas@>;
@@ -11714,7 +11703,10 @@ We should treat any occurrence of them as an error.
 At the end of this stage of our tokenising journey, for valid tokens, we should
 have \\{EndOfIdent} and \\{IdentLength} both initialized here.
 
-@<Determine the ID@>=
+@<Variables for slicing...@>=
+   IdentLength: integer;
+
+@ @<Determine the ID@>=
  @t\4@>     {1. attempt to determine the ID}
       EndOfIdent:=lCurrChar;
       if IsIdentifierFirstLetter(fPhrase[EndOfIdent]) then
@@ -11784,6 +11776,18 @@ entry in the list of symbols (it is ``maximal munch'').
 @d the_item(#) == Items^[fIndex^[#]]
 @d the_token(#) == TokenPtr(the_item(#))^
 
+@<Variables for slicing...@>=
+   EndOfPhrase: integer; {index in \\{fPhrase} for candidate token}
+   lIndex: integer; {index for \\{fIndex} entry}
+   lToken: integer; {index for entries in dictionary starting with the
+   first character of the current token}
+
+@ Reserved keywords and defined terms are loaded into the \\{fTokens}
+dictionary.
+
+\label{MTokeniser.SliceIt.reserved-words}
+@^Tokenise, reserved keywords@>
+ 
 @<Try to find a dictionary symbol@>=
       EndOfPhrase:=lCurrChar; FoundToken:=nil;
       EndOfSymbol:=EndOfPhrase-1; {initialized for comparison}
@@ -11828,7 +11832,14 @@ end
 @ When the identifier is not a number, we insert an ``identifier''
 token into the tokens buffer.
 
-@<Check identifier is not a number@>=
+
+
+@<Variables for slicing...@>=
+   lFailed: integer; {index of first non-digit character}
+   I: integer; {index ranging over the raw lexeme string}
+   lSpelling: string; {raw lexeme as a string}
+
+@ @<Check identifier is not a number@>=
       begin
          lSpelling:=copy(fPhrase,lCurrChar,IdentLength);
          lPos.Col:=fPhrasePos.Col+EndOfIdent-1;
@@ -11849,9 +11860,12 @@ token into the tokens buffer.
          @<Add token to tokens buffer and iterate@>;
       end
 
-@ We add an identifier token to the tokens buffer.
+@ We add an \\{Identifier} token to the tokens buffer.
 
-@<Add token to tokens buffer and iterate@>=
+@<Variables for slicing...@>=
+   lIdent: TokenPtr;
+
+@ @<Add token to tokens buffer and iterate@>=
          lIdent:=new(TokenPtr,Init(Identifier,fIdents.Count+1,lSpelling));
          if fIdents.Search(lIdent,I)
          then dispose(lIdent,Done)
@@ -11874,7 +11888,12 @@ support ``arbitrary precision'' numbers, then this should be modified.
 We can either insert into the tokens buffer an error token (in two
 possible outcomes) or a numeral token (in the third possible outcome).
 
-@<Whoops! Identifier turned out to be a number!@>=
+
+@<Variables for slicing...@>=
+   lNumber: longint;
+   J: integer;
+
+@ @<Whoops! Identifier turned out to be a number!@>=
 begin
    if IdentLength > length(IntToStr(MaxConstInt)) then {insert error token}
    begin
@@ -11991,7 +12010,7 @@ begin
    IsIdentifierFirstLetter:=IsIdentifierLetter(ch);
 end;
 
-@* $\vdash$ Scanner Object.
+@* \secn{} Scanner Object.
 This extends the Tokeniser class (\section\xref{MTokeniser:class}).
 It is the only class extending the Tokeniser class.
 
@@ -12208,7 +12227,7 @@ begin
 end;
 
 @ \node{Constructor.} The only way to construct a scanner. This
-expects an article to be read in (\\{aFileName}) and a dictionary to
+expects an article to be read in \\{aFileName} and a dictionary to
 be loaded (\\{aDctFileName}, loaded with \section\xref{TokensCollection.LoadDct}). The buffer size for
 reading \\{aFileName} is initially @"4000.
 
@@ -12240,7 +12259,7 @@ begin
 end;
 
 
-@* Format.
+@* \chapter{} Format.
 The first step towards disambiguating the meaning of identifiers is to
 use ``formats''.
 Recall from, e.g., Andrzej Trybulec's ``Some Features of the Mizar Language''
@@ -12292,7 +12311,7 @@ uses mobjects,scanner,dicthan,xml_inout; @#
    gPriority: BinIntFunc;
    gFormatsBase: integer; @#
 
-implementation
+implementation @|@#
 
 uses errhan,xml_dict,xml_parser
 mdebug ,info @+ end_mdebug;
@@ -12411,9 +12430,8 @@ end;
       fArgsNbr: byte; @/
       constructor Init(aLSymNr,aRSymNr,aArgsNbr,aLArgsNbr,aRArgsNbr:integer); @t\2\2\2@>
    end
-@
 
-@<Constructors for derived format classess@>=
+@ @<Constructors for derived format classess@>=
 constructor MBracketFormatObj.Init(aLSymNr,aRSymNr,aArgsNbr,aLArgsNbr,aRArgsNbr:integer);
 begin
    fSymbol.Kind:='K';
@@ -12512,7 +12530,7 @@ arguments to the right. If these are equal, then we return 0.
          else if MInfixFormatPtr(aItem1)^.fRightArgsNbr = MInfixFormatPtr(aItem2)^.fRightArgsNbr then
             CompareFormats := 0
 
-@* $\vdash$ List of formats.
+@* \secn{} List of formats.
 We have a collection of format objects managed by a \\{MFormatsList}
 object. There are two groups of public functions: ``Lookup''
 functions (to find the format matching certain parameters), and
@@ -12826,7 +12844,7 @@ begin
    gPriority.Done;
 end;
 
-@* Syntax.
+@* \chapter{} Syntax.
 This describes the syntax for the Mizar language, using expressions,
 subexpressions, blocks, and ``items'' (statements).
 
@@ -13249,24 +13267,21 @@ type @/
    @<Public procedures for \texttt{syntax.pas}@>@; @#
 
    @<Public variables for \texttt{syntax.pas}@>@;
-@
 
-@<Public procedures for \texttt{syntax.pas}@>=
+@ @<Public procedures for \texttt{syntax.pas}@>=
    procedure KillBlock; @t\2@>
    procedure KillItem; @t\2@>
    procedure KillExpression; @t\2@>
    procedure KillSubexpression; @t\2\2@>
 
-@
-
-@<Public variables for \texttt{syntax.pas}@>=
+@ @<Public variables for \texttt{syntax.pas}@>=
    var
       gBlockPtr	 : BlockPtr = nil;
       gItemPtr	   : ItemPtr = nil;
       gExpPtr	   : ExpressionPtr = nil;
       gSubexpPtr	 : SubexpPtr = nil;
 
-@* $\vdash$ Block Object.
+@* \secn{} Block Object.
 
 The Mizar language is block-structured, so we have a Block represent a
 sequence of statements contained within a block.
@@ -13297,23 +13312,20 @@ This is extended in \texttt{parseraddition.pas}.
          procedure StartSchemeDemonstration; virtual; @t\2@>
          procedure FinishSchemeDemonstration; virtual; @t\2\2\2@>
       end
-@
 
-@<Block object implementation@>=
+@ @<Block object implementation@>=
 constructor BlockObj.Init(fBlockKind:BlockKind);
 begin
    nBlockKind:=fBlockKind;
    Previous:=gBlockPtr;
 end;
-@
 
-@<Block object implementation@>=
+@ @<Block object implementation@>=
 procedure BlockObj.Pop;
 begin
 end;
-@
 
-@<Block object implementation@>=
+@ @<Block object implementation@>=
 destructor BlockObj.Done;
 begin
    gBlockPtr:=BlockPtr(Previous);
@@ -13337,16 +13349,14 @@ procedure BlockObj.StartAtSignProof; begin end;
 procedure BlockObj.FinishAtSignProof; begin end;
 
 procedure BlockObj.FinishDefinition; begin end;
-@
 
-@<Block object implementation@>=
+@ @<Block object implementation@>=
 procedure BlockObj.CreateItem(fItemKind:ItemKind);
 begin
    gItemPtr:=new(ItemPtr, Init(fItemKind));
 end;
-@
 
-@<Block object implementation@>=
+@ @<Block object implementation@>=
 procedure BlockObj.CreateBlock(fBlockKind:BlockKind);
 begin
    gBlockPtr:=new(BlockPtr, Init(fBlockKind));
@@ -13359,11 +13369,9 @@ procedure BlockObj.StartSchemeDemonstration; begin end;
 
 procedure BlockObj.FinishSchemeDemonstration; begin end;
 
-@* $\vdash$ Item objects.
+@* \secn{} Item objects.
 
-@
-
-@<Item object implementation@>=
+@ @<Item object implementation@>=
 constructor ItemObj.Init(fItemKind:ItemKind);
 begin
    nItemKind:=fItemKind;
@@ -13676,7 +13684,7 @@ begin
    gExpPtr:=new(ExpressionPtr, Init(fExpKind));
 end;
 
-@* $\vdash$ Expressions.
+@* \secn{} Expressions.
 
 @<Expression class declaration@>=
    ExpressionPtr = ^ExpressionObj; @/
@@ -13695,15 +13703,13 @@ begin
    nExpKind:=fExpKind;
 end;
 
-@
-
-@<Create a subexpression for an expression@>=
+@ @<Create a subexpression for an expression@>=
 procedure ExpressionObj.CreateSubexpression;
 begin
    gSubexpPtr:=new(SubexpPtr, Init);
 end;
 
-@* $\vdash$ Subexpressions.
+@* \secn{} Subexpressions.
 
 @ \node{Constructor.}
 
@@ -13920,7 +13926,7 @@ procedure SubexpObj.InsertIncorrFormula; begin end;
 procedure SubexpObj.FinishEquality; begin end;
 
 
-@* MScanner.
+@* \chapter{} MScanner.
 We have the MScanner module transform an article (an input file) into
 a stream of tokens.
 
@@ -14608,6 +14614,12 @@ depends on the \\{SliceIt} method (\section\xref{MTokeniser.SliceIt}).
 This method is used to determine the next token
 in \texttt{parser.pas}'s \\{Parse} function.
 
+This assumes that |StartScanner| (\section\xref{StartScanner}) has
+been invoked already, which initializes the \\{CurWord} token and
+other variables.
+
+Also important to observe: the \\{Kind} of the token is populated here.
+
 \label{ReadToken}
 
 @^Tokenization@>
@@ -14694,6 +14706,8 @@ end;
 
 @ We construct an MScann object to scan a file.
 
+\label{StartScanner}
+
 @<Implementation for MScanner@>=
 procedure StartScaner;
 begin
@@ -14748,7 +14762,7 @@ begin
    DisposePrf;
 end;
 
-@* Abstract Syntax.
+@* \chapter{} Abstract Syntax.
 A crucial step in any interpreter, compiler, or proof assistant is to
 transform the concrete syntax into an abstract syntax tree. This
 module provides all the classes for the abstract syntax tree \emph{of
@@ -15023,9 +15037,7 @@ Adjective = [ "non" ] [ Adjective-Arguments ] Attribute-Symbol .
       destructor Done; virtual; @t\2\2\2@>
    end
 
-@
-
-@<Adjective expression AST constructor@>=
+@ @<Adjective expression AST constructor@>=
 constructor AdjectiveExpressionObj.Init(const aPos:Position;@+ aSort: AdjectiveSort);
 begin
    nAdjectivePos:=aPos;
@@ -15099,14 +15111,15 @@ begin
    dispose(nArgs,Done);
 end;
 
-@* $\vdash$ Terms (abstract syntax tree).
+@* \secn{} Terms (abstract syntax tree).
 We have an abstract base class for terms, along with the ``sorts''
 (syntactic subclasses) allowed. This allows, e.g., formulas, to refer
 to terms without knowing the sort of term involved. The UML class
 diagram for term:
 \medbreak
 \figure
-\centerline{\includegraphics{img/classdiagram-0.pdf}}
+\centerline{\graphics{img/classdiagram-0}}
+%\centerline{\includegraphics{img/classdiagram-0.pdf}}
 % \epsfbox{img/termclassUML.eps} % for non-PDF output
 \caption{UML class diagram for abstract syntax tree for terms.}
 %\rightline{\vbox{\vskip-3pc\hbox{\eightrm{\eightbf Fig.~\the\fig.} UML class diagram for abstract syntax tree for terms.}}}
@@ -15793,7 +15806,7 @@ begin
    nTermSort:=wsErrorTerm;
 end;
 
-@* $\vdash$ Types (abstract syntax tree).
+@* \secn{} Types (abstract syntax tree).
 The grammar for Mizar types looks like:
 
 {\advance\leftskip by2pc\obeylines\tt
@@ -15991,7 +16004,7 @@ begin
    nTypeSort:=wsErrorType;
 end;
 
-@* $\vdash$ Formulas (abstract syntax tree).
+@* \secn{} Formulas (abstract syntax tree).
 We have an abstract base class for formulas.
 
 @<Abstract base class for formulas@>=
@@ -16556,7 +16569,7 @@ begin
    nformulaSort:=wsErrorFormula;
 end;
 
-@* Weakly strict Mizar article.
+@* \chapter{} Weakly strict Mizar article.
 The parser ``eats in'' a mizar article, then produces
 a \texttt{.wsx} (weakly strict Mizar) \XML/ file containing the
 abstract syntax tree, and also a \texttt{.frt} article containing the
@@ -16622,19 +16635,13 @@ it's staggeringly huge. But a lot of it is boiler-plate.
 
 @^Exercises@>
 
-@
+@ @<Publicly declared types in \texttt{wsmarticle.pas}@>=
 
-@<Publicly declared types in \texttt{wsmarticle.pas}@>=
+@ @<Publicly declared functions in \texttt{wsmarticle.pas}@>=
 
-@
+@ @<Implementation for \texttt{wsmarticle.pas}@>=
 
-@<Publicly declared functions in \texttt{wsmarticle.pas}@>=
-
-@
-
-@<Implementation for \texttt{wsmarticle.pas}@>=
-
-@* $\vdash$ Weakly strict text proper.
+@* \secn{} Weakly strict text proper.
 Mizar provides a grammar for its syntax in the file
 \centerline{\texttt{/usr/local/doc/mizar/syntax.txt}}
 It uses a variant of EBNF:
@@ -17177,7 +17184,7 @@ begin
    inherited Done;
 end;
 
-@* $\vdash$ Schemes.
+@* \secn{} Schemes.
 The grammar for schemes looks like:
 \medbreak
 {\obeylines\parindent=0pt\tt%\ninett\baselineskip=11pt
@@ -17360,7 +17367,7 @@ begin
    dispose(nResType,Done);
 end;
 
-@* $\vdash$ Private definitions.
+@* \secn{} Private definitions.
 The grammar for ``private definitions'' (which introduces block-local
 or article-local terms and predicates) looks like:
 \medbreak
@@ -17478,7 +17485,7 @@ begin
    dispose(nTermExpr,Done);
 end;
 
-@* $\vdash$ Changing types.
+@* \secn{} Changing types.
 Each term has a soft type associated with it, but we can
 ``\texttt{reconsider}'' or change its type. Mizar requires a proof
 that the term really has the new type. The grammar for this statement:
@@ -17571,7 +17578,7 @@ begin
    dispose(nJustification,Done);
 end;
 
-@* $\vdash$ Proof steps. Most of the proof steps are handled in generic
+@* \secn{} Proof steps. Most of the proof steps are handled in generic
 text-item objects. But there are a few which are outside that tagged union.
 In particular: existential elimination (\texttt{consider}
 $\langle\textit{variables}\rangle$ \texttt{such that} $\langle\textit{formula\/}\rangle$),
@@ -17629,9 +17636,7 @@ Linkable-Statement = Compact-Statement
 Choice-Statement = "consider" Qualified-Variables "such" \rlap{Conditions Simple-Justification ";" .}
 \par}
 
-@
-
-@<Publicly declared types in \texttt{wsmarticle.pas}@>=
+@ @<Publicly declared types in \texttt{wsmarticle.pas}@>=
    ChoiceStatementPtr = ^ChoiceStatementObj; @/
    ChoiceStatementObj =
       object(MObject) @t\1@> @/
@@ -17782,9 +17787,8 @@ transforming the right-hand side until we arrive at the desired outcome.
          constructor Init(const aPos:Position;@+ aTerm: TermPtr;@+ aJustification:JustificationPtr); @t\2@>
          destructor Done; virtual; @t\2\2\2@>
       end; @#
-@
 
-@<Publicly declared types in \texttt{wsmarticle.pas}@>=
+@ @<Publicly declared types in \texttt{wsmarticle.pas}@>=
    IterativeEqualityPtr = ^IterativeEqualityObj; @/
    IterativeEqualityObj =
       object(CompactStatementObj) @t\1@> @/
@@ -17830,7 +17834,7 @@ So where are the other proof steps like \texttt{let}
 or \texttt{assume}? Well, these are handled as ``generic text items''
 and use the \\{TextItem} class (\section\xref{TextItem:ast}).
 
-@* $\vdash$ Structures.
+@* \secn{} Structures.
 Just an aside first on ``what is a structure in Mathematics?''
 Logic textbooks assume an \emph{intuitive} (i.e., not formal)
 ``finitary metatheory'' following Hilbert and his famous Programme in
@@ -17912,14 +17916,18 @@ are terms in Logic~\#3.
 describe a ``true'' formula? We can only speak of a \emph{provable}
 formula. Bourbaki's \emph{Theory of Sets} (I \section2.2) confuses
 ``provable'' with ``true'' formulas (they speak of a formula being
-``false in a theory ${\cal T}$'' and true in a theory). This only matters for
+``false in a theory ${\cal T}$'' as being
+synonymous with the formula contradicting the axioms for a theory,
+and true in a theory as being synonymous for being a logical
+consequence from the axioms for a theory). This only matters for
 Mathematical Platonists. Formalists (like the author) would find this
 discussion muddled and nearly metaphysical, generating more heat than light.
 
 @^Bourbaki, Nicolas@>
 
 @ \node{Aside: finitary metatheory, programming languages,
-implementing proof assistants.}  How does that diagram in
+implementing proof assistants.}\hfill\break
+How does that diagram in
 Figure~\ref{fig:platonic-skyscraper} of the last section compare to
 the \emph{actual implementation} of Mizar? Well, a proof assistant
 replaces the ``finitary metatheory'' with an actual programming
@@ -18109,7 +18117,7 @@ begin
    dispose(nSgmFields,Done);
 end;
 
-@* $\vdash$ Patterns.
+@* \secn{} Patterns.
 A ``\emph{Pattern\/}'' in Mizar is a format with the type information
 for all the arguments around a term. The notion of a
 ``\emph{Pattern\/}'' also refers to the definiendum of a definition.
@@ -18142,9 +18150,7 @@ Functor-Loci = Locus \pipe\ "(" Loci ")" .
          constructor Init(const aPos:Position;@+ aSort:ItemKind); @t\2\2\2@>
       end; @#
 
-@
-
-@<Implementation for \texttt{wsmarticle.pas}@>=
+@ @<Implementation for \texttt{wsmarticle.pas}@>=
 constructor PatternObj.Init(const aPos:Position;@+ aSort:ItemKind);
 begin
    nPatternPos:=aPos;
@@ -18334,7 +18340,7 @@ begin
    dispose(nRightArgs,Done);
 end;
 
-@* $\vdash$ Definitions.
+@* \secn{} Definitions.
 In Mizar, we can redefine an existing
 definition (either changing the type of a term or ``the right hand
 side'' of a definition) \emph{or} we can introduce a new
@@ -19206,7 +19212,7 @@ begin
    inherited Done;
 end;
 
-@* $\vdash$ Registrations.
+@* \secn{} Registrations.
 There are three ``main'' types of registrations, which are ``cluster
 registrations'' (because they all involve the ``\texttt{cluster}'' keyword):
 \enumerate
@@ -19571,7 +19577,7 @@ begin
    dispose(nNewTerm,Done);
 end;
 
-@* $\vdash$ Helper functions.
+@* \secn{} Helper functions.
 Capitlization checks if the first character $c$ is lowercase. If so,
 then set the leading character to be |c := c - (ord('a') - ord('A'))|.
 But it leaves the rest of the string untouched.
@@ -19757,7 +19763,7 @@ begin
    else IdentRepr := '';
 end;
 
-@* $\vdash$ Writing WSM XML files.
+@* \secn{} Writing WSM XML files.
 
 @<Publicly declared types in \texttt{wsmarticle.pas}@>=
    OutWSMizFilePtr = ^OutWSMizFileObj; @/
@@ -19817,6 +19823,14 @@ end;
 \\{OutWSMizFileObj.OpenFileWithXSL} is not used anywhere, nor is the
 associated ``\texttt{wsmiz.xml}'' file present anywhere.
 
+Importantly, the \\{nMizarAppearance} field controls whether the \XML/
+generated includes the raw lexeme string as an attribute in the \XML/
+elements or not.
+
+The constructor \\{OpenFileWithXSL} is never used. The \XML/
+stylesheet \texttt{wsmiz.xml} does not seem to be present in the Mizar
+distribution. 
+
 \label{OutWSMizFileObj.OpenFileWithXSL}
 
 @<Implementation for \texttt{wsmarticle.pas}@>=
@@ -19846,12 +19860,10 @@ contents. The RNG compact schema for this looks like:
 
 \medbreak
 {\schema
-grammar \LB
-\quad TextProper = element Text-Proper \LB
-\idnr{\qquad},
-\pos{\qquad},
-\qquad  Item*
-\quad \RB
+TextProper = element Text-Proper \LB
+\idnr{\quad},
+\pos{\quad},
+\quad  Item*
 \RB\par}
 @<Implementation for \texttt{wsmarticle.pas}@>=
 procedure OutWSMizFileObj.Out_TextProper(aWSTextProper:WSTextProperPtr);
@@ -19934,16 +19946,16 @@ then an empty-element will be produced).
 
 \medbreak
 {\schema
-Adjective \pipe= element Adjective \LB
+PositiveAdjective = element Adjective \LB
 \quad attribute nr \LB\ xsd:integer \RB,
 \quad attribute name \LB\ text \RB,
 \spelling{\quad}?,
 \pos{\quad}
 \quad Term*
 \RB
-Adjective \pipe= element NegatedAdjective \LB
+Adjective = PositiveAdjective \pipe\ element NegatedAdjective \LB
 \pos{\quad},
-\quad Adjective
+\quad PositiveAdjective
 \RB
 \par}
 
@@ -20008,7 +20020,8 @@ begin
    Out_XElEnd( XMLElemName[elAdjectiveCluster]);
 end;
 
-@ Writing the \XML/ for a Mizar type.
+@* \subsection{} Emitting XML for types.
+Writing the \XML/ for a Mizar type.
 
 \medbreak
 {\schema
@@ -20208,8 +20221,8 @@ begin
    end;
 end;
 
-@ \node{Emitting XML for formulas.} The \XML/ schema for formulas
-looks something like:
+@* \subsection{} Emitting XML for formulas.
+The \XML/ schema for formulas looks something like:
 
 \medbreak
 {\schema
@@ -20608,7 +20621,8 @@ Existential-Quantifier-Formula = element Existential-Quantifier-Formula \LB
          Out_XElEnd( FormulaName[wsExistentialFormula]);
       end
 
-@ \node{Terms: Simple terms.}
+@* \subsection{} Emitting XML for Terms.
+We begin with simple terms.
 
 \medbreak
 {\schema
@@ -21050,7 +21064,8 @@ Term \pipe= element Global-Choice-Term \LB
             Out_XElEnd(TermName[wsGlobalChoiceTerm]);
          end
 
-@ \node{Type lists.}
+@* \subsection{} Emitting XML for text items.
+Type-lists are needed for text items.
 
 \medbreak
 {\schema
@@ -21668,18 +21683,15 @@ begin
    end;
 end;
 
-@
-
-@<Implementation for \texttt{wsmarticle.pas}@>=
+@ @<Implementation for \texttt{wsmarticle.pas}@>=
 procedure OutWSMizFileObj.Out_SchemeNameInSchemeHead(aSch: SchemePtr);
 begin
    Out_XIntAttr( XMLAttrName[atIdNr], aSch^.nSchemeIdNr);
    if nMizarAppearance then
       Out_XAttr( XMLAttrName[atSpelling], IdentRepr(aSch^.nSchemeIdNr));
 end;
-@
 
-@<Implementation for \texttt{wsmarticle.pas}@>=
+@ @<Implementation for \texttt{wsmarticle.pas}@>=
 procedure OutWSMizFileObj.Out_ItemContentsAttr(aWSItem:WSItemPtr);
 begin
    with aWSItem^ do
@@ -22362,8 +22374,18 @@ begin
    end;
 end;
 
+@ \node{Writing out to an XML file.}
 
-
+@p
+procedure Write_WSMizArticle(aWSTextProper:wsTextProperPtr; aFileName:string);
+var lWSMizOutput: OutWSMizFilePtr;
+begin
+   InitScannerNames;
+   lWSMizOutput:=new(OutWSMizFilePtr,OpenFile(aFileName));
+   lWSMizOutput^.nMizarAppearance:=true;
+   lWSMizOutput^.Out_TextProper(aWSTextProper);
+   dispose(lWSMizOutput,Done);
+end;
 
 @* Deferred.
 
@@ -22371,9 +22393,7 @@ This will not be analyzed until \texttt{first\_identification.pas}
 
 @<Class for Within expression@>=
 
-@
-
-@<Within expression AST implementation@>=
+@ @<Within expression AST implementation@>=
 
 @* Index. Underlined entries in an index item refers to which section
 defines the identifier. Primitive types
