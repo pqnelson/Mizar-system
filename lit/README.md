@@ -1,6 +1,9 @@
 This is a transcription of the Mizar system using Donald Knuth's WEB
 system.
 
+This assumes `WEAVE` is version 4.5; for earlier versions, you may
+have to modify the Makefile.
+
 # Build the documentation
 
 **tl;dr**

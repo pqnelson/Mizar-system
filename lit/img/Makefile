@@ -1,6 +1,6 @@
 FILE=img.mp
 #FILES = img.mp classdiagram.mp
-FILES = img.pdf classdiagram.pdf
+FILES = img.pdf classdiagram.pdf statediagram.pdf
 
 .SUFFIXES: 
 .SUFFIXES: .mp .pdf
@@ -14,3 +14,9 @@ $(FILES): %.pdf: %.mp
 
 pdf:
 	mptopdf $(FILE)
+
+class:
+	mptopdf classdiagram.mp
+
+state:
+	mptopdf statediagram.mp

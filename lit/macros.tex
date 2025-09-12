@@ -12,24 +12,31 @@
 %%   \def\?##1]{\hbox to 1in{\hfil##1.\}}
 %% }
 
+\def\bul{\par\textindent{$\bullet$}}
+
 \newif\ifpdf 
 \ifx\pdfmajorversion\undefined \pdffalse \else \pdftrue \fi
 
 \font\ninett=cmtt9
 \font\eighttt=cmtt8
+\font\nineit=cmti9
+\font\eightit=cmti8
 
 \input{epsf}
 \input graphicx.tex %
 
 \def\graphics#1{\ifpdf\includegraphics{#1.pdf}\else\epsfbox{#1.eps}\fi}
 
-\def\Ithink{} % for my unconfirmed suspicions, to make it easier to
-              % edit them out
+% Grammar related helpers
+\def\<#1>{\ifmmode\langle\hbox{\textit{#1\/}}\rangle\else$\langle$\hbox{\textit{#1\/}}$\rangle$\fi}
+% for my unconfirmed suspicions, to make it easier to edit them out
+% (Style based on Knuth's 1984 article on literate programming)
+\def\Ithink#1{\ifhmode\ \fi$[\mkern-2mu[$#1$]\mkern-2mu]$\ } 
 \def\hex{\hbox{$^{\scriptscriptstyle\#}$\tt\aftergroup}} % CWEB style
 \def\H#1{\hbox{$^{\scriptscriptstyle\#}$\tt#1}}
 % \def\H#1{} % hexadecimal \def\H#1{\hbox{\rm\char"7D\tt#1}} % hexadecimal constant
 \def\shiftSix{\char`\^}
-\def\pipe{\char`\|}
+\def\pipe{\ifmmode\char`\|\else$\char`\|$\fi}
 \def\botofcontents{\vskip 0pt plus 1fil minus 1.5in}
 %\def\to{\;.\;.\;}
 \def\dotdot{\mathrel{.\,.}} % double dot, used only in math mode
@@ -41,8 +48,8 @@
 \edef\modno{\the\fig}
 }
 \def\endfigure{\endgroup}
-\def\caption#1{\rightline{\vbox{\vskip-3pc\hbox{\eightrm{\eightbf Fig.~\the\fig.}
-#1}}}}
+\def\caption#1{{\def\it{\eightit}\def\bf{\eightbf}\rightline{\vbox{\vskip-3pc\hbox{\eightrm{\eightbf Fig.~\the\fig.}
+#1}}}}}
 
 %%%
 %%% XML schema
@@ -95,7 +102,7 @@
 
 \def\doi{\catcode`\_11\relax\@doi}
 
-
+\def\arXiv#1{\href{https://arxiv.org/abs/#1}{{\tt arXiv:#1}}}
 %\def\doi#1{\href{https://doi.org/#1}{{\tt doi:#1}}}
 
 % If not on PDF, just print the link
@@ -122,7 +129,7 @@
   }%
   \immediate\write\labelsfile{%
     \string\expandafter\def\noexpand\csname l@#1\noexpand\endcsname{\modno}%
-}}
+}\ignorespaces}
 
 % \ref
 \def\warnundefinedrefhandler#1{\message{Warning: reference #1 on page \folio undefined}{\bf??}}
@@ -181,6 +188,8 @@
 
 \def\CAUTION/{C{\sc AUTION}}
 \def\ASCII/{{\mc ASCII\spacefactor1000}}
+\def\UML/{{\mc UML\spacefactor1000}}
+\def\WSM/{{\mc WSM\spacefactor1000}}
 
 % Operating systems
 \def\BeOS/{{\mc B}e\acro{OS}}
@@ -275,6 +284,10 @@
 %%% List macros
 %%%
 \newcount\bugs\bugs=0
+\def\startbugs{\smallbreak%
+  \begingroup\advance\leftskip\parindent}%
+\def\endbugs{\par\endgroup%
+  \smallbreak}
 \def\bug{\global\advance\bugs by1%
 \par\hang\textindent{(\the\bugs)}}
 
@@ -334,30 +347,267 @@
 %%% Table of contents hack
 %%%
 
-\newif\ifcontents\contentsfalse
+\newif\ifincontents\incontentsfalse
 \newcount\chapno\chapno=0
 \newcount\secno\secno=0
 \newcount\subsecno\subsecno=0
 \def\refstepchapter{\global\secno=0%
   \global\subsecno=0%
-  \global\advance\chapno by1}
+  \global\advance\chapno by1\message{INCREMENTING THE CHAPTER}}
 \def\refstepsec{\global\subsecno=0%
   \global\advance\secno by1}
 \def\refstepsubsec{\global\advance\subsecno by1}
-\def\chapter#1{\ifcontents\llap{{\bf\the\chapno}\quad}\refstepchapter\fi\ignorespaces}
 
-\def\secn#1{\ifcontents\refstepsec\hbox to2em{\the\secno{.}\hss}\else$\vdash$\ \fi\ignorespaces}
-\def\subsection#1{\ifcontents\refstepsubsec\hbox to4em{\qquad\the\subsecno{.}\hss}%
-\else$\vdash\vdash$\ \fi\ignorespaces}
+\newif\ifinchapter\inchapterfalse
+\newif\ifinsection\insectionfalse
+\newif\ifinsubsection\insubsectionfalse
 
-\def\contentsline#1#2#3#4{\contentstrue%
-    \line{\ignorespaces#1
-      \rm\leaders\hbox to .5em{.\hfil}\hfil
-      \ \ifhint
-          \HINTlink{#2}% No page numbers in HINT
-          \HINTcontents{#1}{#2}%
-        \else\ifpdf\pdflink{#2}\else#2\fi
-          \hbox to3em{\hss#3}\fi}}
+%\def\chapter#1{\global\inchaptertrue\ifincontents\llap{{\bf\the\chapno}\quad}\refstepchapter\fi\ignorespaces}
+
+\def\chapter#1{\global\inchaptertrue\ifincontents\refstepchapter\llap{{\bf\the\chapno}\quad}\fi\ignorespaces}
+
+%\def\chapter#1{\global\chaptertrue\xdef\thechapter{\the\chapno}\ifincontents\llap{{\bf\the\chapno}\quad}\refstepchapter\fi\ignorespaces}
+
+\def\secn#1{\global\inchapterfalse%
+%% \global\insectiontrue%
+%% \global\insubsectionfalse%
+\ifincontents\refstepsec\xdef\thesection{\the\secno}\hbox to2em{\thesection{.}\hss}\fi%
+\ignorespaces}%\else$\vdash$\
+
+\def\subsection#1{\global\inchapterfalse%
+%% \global\insectionfalse%
+%% \global\insubsectiontrue%
+\ifincontents\refstepsubsec%
+\xdef\thesubsection{\the\subsecno}%
+\hbox to4em{\qquad\thesubsection{.}\hss}\fi%
+\ignorespaces}%\else$\vdash\vdash$\ 
+
+\def\initialchapno{0}
+
+\def\setchapno#1{\global\chapno=#1\gdef\initialchapno{#1}}
+
+\def\togglecontents{%
+  %\gdef\chapter##1{\global\advance\chapno by1\llap{{\bf\the\chapno}\quad}\ignorespaces}%
+  \global\incontentstrue%
+  \global\chapno=\initialchapno%
+  \global\secno=0%
+  \global\subsecno=0}
+
+\def\topofcontents{\global\incontentstrue\togglecontents%
+  \centerline{\titlefont\title}\vskip.7in
+  \vfill} % this material will start the table of contents page
+
+%%%
+%%% Hack for printing chapters and sections?
+%%%
+\font\tenssbx=cmssbx10
+\font\twelvess=cmss12
+\font\titlefont=cmssbx10 scaled\magstep2
+
+% Borrowed from Knuth's "Art of Computer Programming"
+\def\beginchapter#1: #2.{%
+  %\vfill\eject
+  \leftline{\twelvess #1} %\spaceskip=10pt \def\\{\kern1pt}
+  \vskip 4pc
+  \rightline{\titlefont #2}
+  \vskip 2pc plus 1 pc minus 1 pc}
+
+\def\beginsection#1: #2.{%
+  \leftline{\tenssbx#1. \uppercase{#2}}
+  \nobreak\smallskip\noindent}
+
+\newdimen\spaceleft
+
+% Ensure there's enough space for a subsection and the first numbered
+% paragraph in the subsection. If not, just start on a new page.
+\def\subsectionbreak{%
+  \spaceleft=\vsize%
+  \advance\spaceleft by-\pagetotal%
+  \ifdim\spaceleft<2.5in%
+    \vfill\eject%
+  \else%
+    \bigbreak%
+  \fi%
+}
+
+\def\beginsubsection#1: #2.{%
+  \subsectionbreak
+  \leftline{\tenssbx#1. #2}
+  \nobreak\smallskip\noindent}
+
+\def\oldN#1.#2.{%
+  \ifpdf \ifpdflua\relax
+  \else \special{pdf: outline 0 << /Title (\the\toksE) /Dest
+    [ @thispage /FitH @ypos ] >>}\fi\fi
+  \ifon\startsection{\bf\ignorespaces#2.\quad}\ignorespaces}
+
+\def\prefix{}
+
+\newif\ifinfile\infilefalse
+
+
+\def\newM#1.{\newMN#1.\ifon\vfil\penalty-100\vfilneg % beginning of section
+  \global\inchapterfalse%
+  \global\insectionfalse%
+  \global\insubsectionfalse%
+  \vskip\intersecskip\startsection\ignorespaces}
+
+\def\N#1.  [#2] #3.{% beginning of starred section
+  \if C#2\def\prefix{\chapter{}}\inchaptertrue%
+  \else\if F#2\def\prefix{\chapter{}}\inchaptertrue\infiletrue%
+  \else\if S#2\def\prefix{\secn{}}\insectiontrue%
+  \else\if s#2\def\prefix{\subsection{}}\insubsectiontrue%
+  \else\def\prefix{\noindent\ignorespaces}\fi\fi\fi\fi%
+  \ifpdf{\makeoutlinetoks#3\outlinedone}\fi%
+  \gtitle={#3}\MN#1.\ifinsubsection\else\vfill\eject\fi % define running headline
+  \message{*\modno} % progress report
+  \def\stripprefix##1>{}\expandafter\def\expandafter\gtitletoks\expandafter{\prefix #3}%
+  \edef\gtitletoks{\expandafter\stripprefix\meaning\gtitletoks}%
+  \ifinchapter%
+    \refstepchapter%
+    \ifinfile%
+    \beginchapter{File \the\chapno}: #3.%
+    \else%
+    \beginchapter{Chapter \the\chapno}: #3.%
+    \fi%
+    \newM#1.%
+  \else%
+    \ifinsection%
+      \refstepsec%
+      \beginsection{Section \the\chapno.\the\secno}: #3.%
+      \newM#1.%
+    \else%
+      \ifinsubsection\message{IN SUBSECTION}%
+        \refstepsubsec%
+        \beginsubsection{Subsection \the\chapno.\the\secno.\the\subsecno}: #3.%
+        \newM#1.%
+      \else% in all other cases
+        \oldN#1.#3.%
+      \fi%
+    \fi%
+  \fi%
+  \global\infilefalse%
+  \global\inchapterfalse%
+  \global\insectionfalse%
+  \global\insubsectionfalse%
+  \edef\next{\write\cont{\Z{\gtitletoks}{\modno}% write to contents file
+   {\noexpand\the\pageno}{\the\toksE}}}\next % \Z{title}{sec}{page}{ss}
+\ignorespaces}
+
+\def\M#1.{\MN#1.\ifon\vfil\penalty-100\vfilneg % beginning of section
+  \global\inchapterfalse%
+  \global\insectionfalse%
+  \global\insubsectionfalse%
+  \vskip\intersecskip\startsection\ignorespaces}
+
+\def\MN#1.{\par % common code for \M, \N
+  {\xdef\modstar{#1}\let\*=\empty\xdef\modno{#1}}% remove \* from section name
+  \ifx\modno\modstar \onmaybe \else\ontrue \fi
+  \mark{{{\tensy x}\modno}{\the\gtitle}}}
+\def\newMN#1.{\par % common code for \M, \N
+  {\xdef\modstar{#1}\let\*=\empty\xdef\modno{#1}}% remove \* from section name
+  \ifx\modno\modstar \onmaybe \else\ontrue \fi
+  \mark{{{\tensy x}\modno}{\the\gtitle}}}
+\endinput
+
+\newif\ifinx\inxfalse
+
+
+
+%%%
+%%% Failed attempt to make the header include the chapter (or
+%%% section.subsection) number, and the footer include the page
+%%% number.
+%%%
+
+\iffalse
+\def\MN#1.{\par % common code for \M, \N
+  {\xdef\modstar{#1}\let\*=\empty\xdef\modno{#1}}% remove \* from section name
+  \ifx\modno\modstar \onmaybe \else\ontrue \fi
+  \mark{{\pilcrow\modno}{\the\gtitle}}}
+% each \mark is {section reference or null}{group title}
+
+\def\lr{L}
+\botmark{\the\pageno}
+%\newtoks\footline
+\footline={\ifodd\pageno%
+  \if L\lr\hskip\pagewidth\fi\hss\the\pageno%\fi%
+\else%
+  \the\pageno\hss%
+\fi}
+
+
+\def\thesection{\ifnum\secno>0\section\the\secno\fi}%\ifnum\subsecno>0.\the\subsecno\fi\fi}
+\def\thesubsection{\thesection\ifnum\subsecno>0{.\the\subsecno}\fi}
+\def\lheader{\mainfont\uppercase\expandafter{\romannumeral\chapno}\eightrm\qquad\grouptitle
+  \hfill\title\qquad\mainfont\topsecno} % top line on left-hand pages
+\def\rheader{\mainfont\topsecno\eightrm\qquad\title\hfill
+  \grouptitle\qquad\mainfont\thesubsection} % top line on right-hand pages
+
+%\advance\hsize by24pt
+%\advance\fullpageheight by24pt
+
+\def\makefootline{\baselineskip=24pt \lineskiplimit=0pt%
+  \ifodd\pageno\rightline{\the\footline}%
+  \else\leftline{\the\footline}\fi}
+
+% Chapter 23 of TeXbook for output routines
+%\let\page=\pagebody \raggedbottom % cweb 3.2 uses this instead of next line
+\def\page{\box255 }\normalbottom % faster, but loses plain TeX footnotes
+\def\normaloutput#1#2#3{\ifodd\pageno\hoffset=\pageshift\fi
+  \shipout\vbox{
+    \vbox to\fullpageheight{
+      \iftitle\global\titlefalse
+      \else\hbox to\pagewidth{\vbox to10pt{}\ifodd\pageno #3\else#2\fi}\medbreak\fi%
+      \vfill#1%
+      \medbreak\hbox to\pagewidth{\ifinx\ifodd\pageno\hss\fi\fi\makefootline}%
+      }} % parameter #1 is the page itself
+  \global\advance\pageno by1}
+
+\def\inx{\global\inxtrue\par\vskip6pt plus 1fil % we are beginning the index
+  \def\page{\box255 } \normalbottom
+  \write\cont{} % ensure that the contents file isn't empty
+       \write\cont{\catcode `\noexpand\@=12\relax}   % \makeatother
+  \closeout\cont % the contents information has been fully gathered
+  \output{\ifpagesaved\normaloutput{\box\sbox}\lheader\rheader\fi
+    \global\setbox\sbox=\page \global\pagesavedtrue \mark{\topmark}}
+  \pagesavedfalse \eject % eject the page-so-far and predecessors
+  \setbox\sbox\vbox{\unvbox\sbox} % take it out of its box
+  \vsize=\pageheight \advance\vsize by -\ht\sbox % the remaining height
+  \hsize=.5\pagewidth \advance\hsize by -10pt
+    % column width for the index (20pt between cols)
+  \ifhint\else
+  \parfillskip 0pt plus .6\hsize % try to avoid almost empty lines
+  \fi
+  \def\lr{L} % this tells whether the left or right column is next
+  \output{\if L\lr\global\setbox\lbox=\page \gdef\lr{R}
+    \else\normaloutput{\vbox to\pageheight{\box\sbox\vss
+        \hbox to\pagewidth{\box\lbox\hfil\page}}}\lheader\rheader
+    \global\vsize\pageheight\gdef\lr{L}\global\pagesavedfalse\fi}
+  \message{Index:}
+  \parskip 0pt plus .5pt
+  \outer\def\:##1, ##2.{\par\hangindent2em\noindent##1:\kern1em
+    \scan##2!.} % index entry
+  \let\ttentry=\. \def\.##1{\ttentry{##1\kern.2em}} % give \tt a little room
+  \def\[##1]{$\underline{\scan##1!}$\scan} % underlined index item
+  \ifacrohint\def\digits{\pdflink{\the\countA}\scan}
+  \else\def\digits{{\the\countA}\scan}\fi
+  \def\scan##1{\begingroup
+    \ifx!##1% exit on exclamation point
+    \else\ifx,##1,\space\aftergroup\scan % insert ,\space}\scan...
+    \else\ifx\[##1\aftergroup##1% insert }\[...
+    \else\ifx\*##1\aftergroup\lapstar\aftergroup\scan % insert }\lapstar\scan...
+    \else\ifnum`##1>`9##1\aftergroup\scan % insert #1}\scan...
+    \else\ifnum`##1<`0##1\aftergroup\scan % insert #1}\scan...
+    \else
+      \afterassignment\digits \aftergroup\countA
+      \aftergroup##1% insert }\countA=#1\digits...
+    \fi\fi\fi\fi\fi \fi
+    \endgroup}
+  \rm \rightskip0pt plus 2.5em \tolerance 10000
+  \hyphenpenalty 10000 \parindent0pt}
+\fi
+
 
 
 \endinput

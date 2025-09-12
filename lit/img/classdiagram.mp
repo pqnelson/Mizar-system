@@ -1,8 +1,8 @@
 input metauml;
 
 %outputtemplate := "termclassUML.eps";
-beginfig(0)
-  % metauml_defaultFontOblique  := "ptmri8r";
+
+beginfig(0) % class diagram for AST for terms
   metauml_defaultFontOblique  := "cmti8";
   AbstractClass.TermExpression("TermExpression")()(); % [12]
   TermExpression.n = (0,0);
@@ -52,8 +52,6 @@ beginfig(0)
   SelectorTerm.e = (-30,0) + OneArgumentTerm.w;
   Class.ForgetfulTerm("ForgetfulTerm")()();
   ForgetfulTerm.w = (30,0) + OneArgumentTerm.e;
-  %SelectorTerm.se = (-20*sqrt(2), 20*sqrt(2)) + OneArgumentTerm.nw;
-  %ForgetfulTerm.sw = (20*sqrt(2), 20*sqrt(2)) + OneArgumentTerm.ne;
   drawObjects(SelectorTerm,ForgetfulTerm);
   link(inheritance)(SelectorTerm.e -- OneArgumentTerm.w);
   link(inheritance)(ForgetfulTerm.w -- OneArgumentTerm.e);
@@ -79,5 +77,88 @@ beginfig(0)
   drawObject(QualifiedTerm);
   link(inheritance)(QualifiedTerm.e -- ExactlyTerm.w);
 endfig;
+
+Class.MObject("MObject")()();
+Class.StackedObj("StackedObj")("+ Previous : ^StackedObj")();
+Class.ItemObj("ItemObj")("+ Previous : ^StackedObj", "+ nItemKind : ItemKind")();
+
+beginfig(1)
+  % Class.MObject("MObject")()();
+  % Class.StackedObj("StackedObj")("+ Previous : StackedObj")();
+  StackedObj.w = MObject.e + (30,0);
+  ItemObj.w = StackedObj.e + (30,0);
+  drawObjects(MObject, StackedObj, ItemObj);
+  link(inheritance)(StackedObj.w -- MObject.e);
+  link(inheritance)(ItemObj.w -- StackedObj.e);
+endfig;
+
+Class.BlockObj("BlockObj")("+ Previous : ^StackedObj", "+ nBlockKind : BlockKind")();
+
+beginfig(2)
+  StackedObj.w = MObject.e + (30,0);
+  BlockObj.w = StackedObj.e + (30,0);
+  drawObjects(MObject, StackedObj, BlockObj);
+  link(inheritance)(StackedObj.w -- MObject.e);
+  link(inheritance)(BlockObj.w -- StackedObj.e);
+endfig;
+
+Class.wsBlock("wsBlock")("+ nBlockKind : BlockKind", "+ nItems : wsItem[0..*]",
+    "+ nBlockPos : Position", "+ nBlockEndPos : Position")();
+Class.wsTextProper("wsTextProper")("+ nArticleId : string",
+    "+ nArticleExt : string")("+ NewBlock(BlockKind,Position) : ^wsBlock",
+    "+ NewItem(ItemKind,Position) : ^wsItem");
+Class.wsItem("wsItem")("+ nItemKind : ItemKind", "+ nContent : ^MObject", "+ nBlock : ^wsBlock")();
+beginfig(3)
+  wsBlock.w = MObject.e + (30,0);
+  wsTextProper.w = wsBlock.e + (30,0);
+  wsItem.n = wsBlock.s + (0, -30);
+  drawObjects(MObject,wsBlock,wsTextProper,wsItem);
+  link(inheritance)(wsBlock.w -- MObject.e);
+  link(inheritance)(wsTextProper.w -- wsBlock.e);
+  link(composition)(wsItem.n -- wsBlock.s);
+endfig;
+
+Class.extBlock("extBlock")("+ nLastWSItem : ^wsItem",
+    "+ nLastWSBlock : ^wsBlock",
+    "+ nLinked : Boolean",
+    "+ nLinkAllowed : Boolean",
+    "+ nLinkProhibited : Boolean",
+    "+ nLinkPos : Position",
+    "+ nInDiffuse : Boolean",
+    "+ nLastSentence : ^Formula",
+    "+ nHasAssumptions : Boolean")();
+
+beginfig(4)
+  StackedObj.w = MObject.e + (30,0);
+  BlockObj.w = StackedObj.e + (30,0);
+  extBlock.w = BlockObj.e + (30,0);
+  drawObjects(MObject, StackedObj, BlockObj, extBlock);
+  link(inheritance)(StackedObj.w -- MObject.e);
+  link(inheritance)(BlockObj.w -- StackedObj.e);
+  link(inheritance)(extBlock.w -- BlockObj.e);
+endfig;
+
+
+Class.extItem("extItem")("+ nItemPos : Position",
+    "+ nLastWSItem : ^wsItem",
+    "+ nLabelIdNr : integer",
+    "+ nLabelIdPos : Position",
+    "+ nLabel : ^Label",
+    "+ nPropPos : Position",
+    "+ nInference : ^Justification",
+    "+ nLinkable : Boolean",
+    "+ nRegularStatementKind : RegularStatementKind",
+    "+ nItAllowed : Boolean")();
+
+beginfig(5)
+  %StackedObj.w = MObject.e + (30,0);
+  ItemObj.w = StackedObj.e + (30,0);
+  extItem.w = ItemObj.e + (30,0);
+  drawObjects(StackedObj, ItemObj, extItem);
+  %link(inheritance)(StackedObj.w -- MObject.e);
+  link(inheritance)(ItemObj.w -- StackedObj.e);
+  link(inheritance)(extItem.w -- ItemObj.e);
+endfig;
+
 %outputtemplate := "%j%c.eps";
 end;
